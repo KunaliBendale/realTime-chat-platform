@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+
+  <title>Socket Chat Test</title>
+
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+  <style>
+    body {
+      font-family: Arial;
+      margin: 40px;
+    }
+
+    input,
+    button {
+      padding: 10px;
+      margin: 5px;
+    }
+
+    #messages {
+      border: 1px solid #ccc;
+      height: 350px;
+      overflow-y: auto;
+      padding: 10px;
+      margin-top: 20px;
+    }
+
+    .msg {
+      background: #f1f1f1;
+      padding: 10px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+    }
+
+    .typing {
+      color: green;
+      margin-top: 10px;
+    }
+
+    .online {
+      color: blue;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h2>Socket.IO Real-Time Chat Test</h2>
+
+  <input type="text" id="receiverId" placeholder="Receiver User ID" />
+
+  <button onclick="connectSocket()">
+    Connect Socket
+  </button>
+
+  <button onclick="joinChat()">
+    Join Chat
+  </button>
+
+  <br><br>
+
+  <input type="text" id="messageInput" placeholder="Type message" />
+
+  <button onclick="sendMessage()">
+    Send Message
+  </button>
+
+  <button onclick="sendTyping()">
+    Typing
+  </button>
+
+  <button onclick="stopTyping()">
+    Stop Typing
+  </button>
+
+  <div class="typing" id="typingStatus"></div>
+
+  <div class="online" id="onlineUsers"></div>
+
+  <div id="messages"></div>
+
+  <script>
+
+    let socket;
+
+    function connectSocket() {
+
+      const token = prompt("Enter JWT Token");
+
+      socket = io("http://localhost:5000", {
+        auth: {
+          token,
+        },
+
+        transports: ["polling", "websocket"],
+
+        reconnection: false,
+      });
+
+      /* ======================
+         CONNECTION
+      ====================== */
+
+      socket.on("connect", () => {
+
+        console.log("Socket Connected");
+
+        alert("Socket Connected Successfully");
+
+      });
+
+      socket.on("connect_error", (err) => {
+
+        console.log("Connect Error:", err.message);
+
+        alert("Connect Error: " + err.message);
+
+      });
+
+      /* ======================
+         RECEIVE MESSAGE
+      ====================== */
+
+      socket.on("receiveMessage", (data) => {
+
+        console.log("Message:", data);
+
+        const div = document.createElement("div");
+
+        div.classList.add("msg");
+
+        div.innerHTML = `
+          <b>Sender:</b> ${data.sender} <br/>
+          <b>Message:</b> ${data.message}
+        `;
+
+        document
+          .getElementById("messages")
+          .appendChild(div);
+
+      });
+
+      /* ======================
+         ONLINE USERS
+      ====================== */
+
+      socket.on("onlineUsers", (users) => {
+
+        console.log("Online Users:", users);
+
+        document.getElementById("onlineUsers")
+          .innerHTML =
+          "Online Users: " + users.join(", ");
+
+      });
+
+      /* ======================
+         USER STATUS
+      ====================== */
+
+      socket.on("userStatus", (data) => {
+
+        console.log("User Status:", data);
+
+      });
+
+      /* ======================
+         TYPING
+      ====================== */
+
+      socket.on("typing", (data) => {
+
+        document.getElementById("typingStatus")
+          .innerHTML =
+          `${data.senderId} is typing...`;
+
+      });
+
+      socket.on("stopTyping", () => {
+
+        document.getElementById("typingStatus")
+          .innerHTML = "";
+
+      });
+
+      /* ======================
+         MESSAGE SEEN
+      ====================== */
+
+      socket.on("messageSeen", (data) => {
+
+        console.log("Message Seen:", data);
+
+      });
+
+      /* ======================
+         MESSAGE DELIVERED
+      ====================== */
+
+      socket.on("messageDelivered", (data) => {
+
+        console.log("Message Delivered:", data);
+
+      });
+
+    }
+
+    /* ======================
+       JOIN CHAT
+    ====================== */
+
+    function joinChat() {
+
+      const receiverId =
+        document.getElementById("receiverId").value;
+
+      socket.emit("joinChat", {
+        receiverId,
+      });
+
+      console.log("Chat Joined");
+
+    }
+
+    /* ======================
+       SEND MESSAGE
+    ====================== */
+
+    function sendMessage() {
+
+      const receiverId =
+        document.getElementById("receiverId").value;
+
+      const content =
+        document.getElementById("messageInput").value;
+
+      socket.emit("sendMessage", {
+        receiverId,
+        content,
+      });
+
+      document.getElementById("messageInput").value = "";
+
+    }
+
+    /* ======================
+       TYPING
+    ====================== */
+
+    function sendTyping() {
+
+      const receiverId =
+        document.getElementById("receiverId").value;
+
+      socket.emit("typing", {
+        receiverId,
+      });
+
+    }
+
+    function stopTyping() {
+
+      const receiverId =
+        document.getElementById("receiverId").value;
+
+      socket.emit("stopTyping", {
+        receiverId,
+      });
+
+    }
+
+  </script>
+
+</body>
+
+</html>
