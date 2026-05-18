@@ -2,8 +2,10 @@ import { Server } from "socket.io";
 import http from "http";
 import express from "express";
 
+import Chat from "../models/chatModel.js";
 import Message from "../models/messageModel.js";
 import socketAuthMiddleware from "../middleware/socket.auth.middleware.js";
+import { findOrCreateDirectChat } from "../controllers/chatController.js";
 
 const app = express();
 const server = http.createServer(app);
@@ -49,6 +51,36 @@ const generateChatRoomId = (user1, user2) => {
   return [user1, user2].sort().join("_");
 };
 
+const getDirectChatForSocket = async (userId, receiverId, chatId) => {
+  if (!chatId && !receiverId) return null;
+
+  if (chatId) {
+    const chat = await Chat.findOne({
+      _id: chatId,
+      isGroup: false,
+      users: userId,
+    });
+
+    if (!chat) return null;
+
+    const receiver = chat.users.find(
+      (participantId) => participantId.toString() !== userId
+    );
+
+    return {
+      chat,
+      receiverId: receiver?.toString() || receiverId,
+    };
+  }
+
+  const chat = await findOrCreateDirectChat(userId, receiverId);
+
+  return {
+    chat,
+    receiverId,
+  };
+};
+
 /* =========================
    SOCKET CONNECTION
 ========================= */
@@ -82,14 +114,24 @@ io.on("connection", (socket) => {
        JOIN PRIVATE CHAT
     ========================= */
 
-    socket.on("joinChat", ({ receiverId }) => {
+    socket.on("joinChat", async ({ receiverId, chatId }) => {
       try {
-        const roomId = generateChatRoomId(userId, receiverId);
+        const directChat = await getDirectChatForSocket(userId, receiverId, chatId);
+
+        if (!directChat?.chat || !directChat.receiverId) {
+          return socket.emit("socketError", {
+            message: "Chat not found",
+          });
+        }
+
+        const roomId = generateChatRoomId(userId, directChat.receiverId);
 
         socket.join(roomId);
+        socket.join(directChat.chat._id.toString());
 
         socket.emit("chatJoined", {
           roomId,
+          chatId: directChat.chat._id,
         });
 
         console.log(`${userId} joined room ${roomId}`);
@@ -104,38 +146,63 @@ io.on("connection", (socket) => {
 
     socket.on("sendMessage", async (data) => {
       try {
-        const { receiverId, content, media = null } = data;
+        const { receiverId, chatId, content,} = data;
 
-        const roomId = generateChatRoomId(userId, receiverId);
+        if (!content && !media) {
+          return socket.emit("socketError", {
+            message: "Message content or media is required",
+          });
+        }
+
+        const directChat = await getDirectChatForSocket(userId, receiverId, chatId);
+
+        if (!directChat?.chat || !directChat.receiverId) {
+          return socket.emit("socketError", {
+            message: "Chat not found",
+          });
+        }
+
+        const roomId = generateChatRoomId(userId, directChat.receiverId);
+        const isReceiverOnline = onlineUsers.has(directChat.receiverId);
 
         // save message
         const newMessage = await Message.create({
           sender: userId,
-          receiver: receiverId,
+          receiver: directChat.receiverId,
           message: content,
-          media,
+          chatId: directChat.chat._id,
+          image: typeof media === "string" ? media : media?.url,
           roomId,
-          delivered: true,
+          delivered: isReceiverOnline,
           seen: false,
         });
+
+        directChat.chat.latestMessage = newMessage._id;
+        await directChat.chat.save();
 
         const messagePayload = {
           _id: newMessage._id,
           sender: userId,
-          receiver: receiverId,
+          receiver: directChat.receiverId,
           message: newMessage.message,
           media: newMessage.media,
+          image: newMessage.image,
+          chatId: directChat.chat._id,
           roomId,
-          delivered: true,
+          delivered: newMessage.delivered,
           seen: false,
           createdAt: newMessage.createdAt,
         };
 
         // send message to room
-        io.to(roomId).emit("receiveMessage", messagePayload);
+        io.to(roomId)
+          .to(directChat.chat._id.toString())
+          .to(directChat.receiverId)
+          .to(userId)
+          .emit("receiveMessage", messagePayload);
 
         // update recent chats instantly
-        io.to(receiverId).emit("conversationUpdated", messagePayload);
+        io.to(directChat.receiverId).emit("conversationUpdated", messagePayload);
 
         io.to(userId).emit("conversationUpdated", messagePayload);
 
@@ -182,15 +249,17 @@ io.on("connection", (socket) => {
 
     socket.on("messageDelivered", async ({ messageId }) => {
       try {
-        const updatedMessage = await Message.findByIdAndUpdate(
-          messageId,
-          {
-            delivered: true,
-          },
-          {
-            new: true,
-          }
-        );
+        const message = await Message.findOne({
+          _id: messageId,
+          receiver: userId,
+        });
+
+        if (!message) return;
+
+        message.delivered = true;
+        message.deliveredAt = message.deliveredAt || new Date();
+
+        const updatedMessage = await message.save();
 
         if (!updatedMessage) return;
 
@@ -199,6 +268,7 @@ io.on("connection", (socket) => {
           "messageDelivered",
           {
             messageId,
+            deliveredAt: updatedMessage.deliveredAt,
           }
         );
 
@@ -212,6 +282,118 @@ io.on("connection", (socket) => {
     ========================= */
 
     socket.on("messageSeen", async ({ messageId }) => {
+      try {
+        const updatedMessage = await Message.findOneAndUpdate(
+          {
+            _id: messageId,
+            receiver: userId,
+          },
+          {
+            delivered: true,
+            deliveredAt: new Date(),
+            seen: true,
+            seenAt: new Date(),
+          },
+          {
+            new: true,
+          }
+        );
+
+        if (!updatedMessage) return;
+
+        // notify sender
+        io.to(updatedMessage.sender.toString()).emit(
+          "messageSeen",
+          {
+            messageId,
+            seen: true,
+            seenAt: updatedMessage.seenAt,
+          }
+        );
+
+      } catch (error) {
+        console.log("Message Seen Error:", error.message);
+      }
+    });
+
+    socket.on("messagesSeen", async ({ chatId, messageIds = [] }) => {
+      try {
+        if (!chatId && !messageIds.length) return;
+
+        const filter = {
+          receiver: userId,
+          seen: false,
+        };
+
+        if (chatId) {
+          filter.chatId = chatId;
+        }
+
+        if (messageIds.length) {
+          filter._id = {
+            $in: messageIds,
+          };
+        }
+
+        const seenAt = new Date();
+        const messages = await Message.find(filter).select("_id sender");
+
+        if (!messages.length) return;
+
+        await Message.updateMany(filter, {
+          delivered: true,
+          deliveredAt: seenAt,
+          seen: true,
+          seenAt,
+        });
+
+        messages.forEach((message) => {
+          io.to(message.sender.toString()).emit("messageSeen", {
+            messageId: message._id,
+            seen: true,
+            seenAt,
+          });
+        });
+
+      } catch (error) {
+        console.log("Messages Seen Error:", error.message);
+      }
+    });
+
+    /* =========================
+       LEGACY MESSAGE STATUS HANDLERS
+    ========================= */
+
+    socket.on("legacyMessageDelivered", async ({ messageId }) => {
+      try {
+        const updatedMessage = await Message.findByIdAndUpdate(
+          messageId,
+          {
+            delivered: true,
+            deliveredAt: new Date(),
+          },
+          {
+            new: true,
+          }
+        );
+
+        if (!updatedMessage) return;
+
+        // notify sender
+        io.to(updatedMessage.sender.toString()).emit(
+          "messageDelivered",
+          {
+            messageId,
+            deliveredAt: updatedMessage.deliveredAt,
+          }
+        );
+
+      } catch (error) {
+        console.log("Message Delivered Error:", error.message);
+      }
+    });
+
+    socket.on("legacyMessageSeen", async ({ messageId }) => {
       try {
         const updatedMessage = await Message.findByIdAndUpdate(
           messageId,
