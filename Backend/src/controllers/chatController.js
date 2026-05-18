@@ -9,6 +9,10 @@ const chatPopulateOptions = [
     select: "-password",
   },
   {
+    path: "groupAdmin",
+    select: "name email profilePic",
+  },
+  {
     path: "latestMessage",
     populate: {
       path: "sender receiver",
@@ -16,6 +20,36 @@ const chatPopulateOptions = [
     },
   },
 ];
+
+const parseUserIds = (users = []) => {
+  if (typeof users === "string") {
+    try {
+      users = JSON.parse(users);
+    } catch {
+      users = users.split(",");
+    }
+  }
+
+  if (!Array.isArray(users)) return [];
+
+  return users
+    .map((userId) => userId?.toString().trim())
+    .filter(Boolean);
+};
+
+const getUniqueValidUserIds = (users = []) => {
+  return [...new Set(users)].filter((userId) =>
+    mongoose.Types.ObjectId.isValid(userId)
+  );
+};
+
+const populateChat = (chatId) => {
+  return Chat.findById(chatId).populate(chatPopulateOptions);
+};
+
+const isGroupAdmin = (chat, userId) => {
+  return chat.groupAdmin?.toString() === userId.toString();
+};
 
 export const findOrCreateDirectChat = async (currentUserId, otherUserId) => {
   if (
@@ -128,6 +162,237 @@ export const getChatMessages = async (req, res) => {
     res.status(200).json({
       messages: messages.reverse(),
       nextCursor,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: error.message,
+    });
+  }
+};
+
+export const createGroupChat = async (req, res) => {
+  try {
+    const chatName = req.body.chatName || req.body.name;
+    const requestedUsers = parseUserIds(req.body.users);
+    const users = getUniqueValidUserIds([
+      ...requestedUsers,
+      req.user._id.toString(),
+    ]);
+
+    if (!chatName?.trim()) {
+      return res.status(400).json({ message: "Group name is required" });
+    }
+
+    if (users.length < 2) {
+      return res.status(400).json({
+        message: "A group chat needs at least one other user",
+      });
+    }
+
+    const existingUsersCount = await User.countDocuments({
+      _id: {
+        $in: users,
+      },
+    });
+
+    if (existingUsersCount !== users.length) {
+      return res.status(400).json({ message: "One or more users are invalid" });
+    }
+
+    const groupChat = await Chat.create({
+      chatName: chatName.trim(),
+      isGroup: true,
+      users,
+      groupAdmin: req.user._id,
+    });
+
+    res.status(201).json(await populateChat(groupChat._id));
+  } catch (error) {
+    res.status(500).json({
+      message: error.message,
+    });
+  }
+};
+
+export const updateGroupChat = async (req, res) => {
+  try {
+    const { chatId } = req.params;
+    const chatName = req.body.chatName || req.body.name;
+
+    if (!mongoose.Types.ObjectId.isValid(chatId)) {
+      return res.status(400).json({ message: "Invalid chatId" });
+    }
+
+    if (!chatName?.trim()) {
+      return res.status(400).json({ message: "Group name is required" });
+    }
+
+    const chat = await Chat.findOne({
+      _id: chatId,
+      isGroup: true,
+    });
+
+    if (!chat) {
+      return res.status(404).json({ message: "Group chat not found" });
+    }
+
+    if (!isGroupAdmin(chat, req.user._id)) {
+      return res.status(403).json({ message: "Only group admin can edit group" });
+    }
+
+    chat.chatName = chatName.trim();
+    await chat.save();
+
+    res.status(200).json(await populateChat(chat._id));
+  } catch (error) {
+    res.status(500).json({
+      message: error.message,
+    });
+  }
+};
+
+export const addUsersToGroup = async (req, res) => {
+  try {
+    const { chatId } = req.params;
+    const newUsers = getUniqueValidUserIds(parseUserIds(req.body.users));
+
+    if (!mongoose.Types.ObjectId.isValid(chatId)) {
+      return res.status(400).json({ message: "Invalid chatId" });
+    }
+
+    if (!newUsers.length) {
+      return res.status(400).json({ message: "users are required" });
+    }
+
+    const chat = await Chat.findOne({
+      _id: chatId,
+      isGroup: true,
+    });
+
+    if (!chat) {
+      return res.status(404).json({ message: "Group chat not found" });
+    }
+
+    if (!isGroupAdmin(chat, req.user._id)) {
+      return res.status(403).json({ message: "Only group admin can add users" });
+    }
+
+    const existingUsersCount = await User.countDocuments({
+      _id: {
+        $in: newUsers,
+      },
+    });
+
+    if (existingUsersCount !== newUsers.length) {
+      return res.status(400).json({ message: "One or more users are invalid" });
+    }
+
+    newUsers.forEach((userId) => {
+      const alreadyInGroup = chat.users.some(
+        (existingUserId) => existingUserId.toString() === userId
+      );
+
+      if (!alreadyInGroup) {
+        chat.users.push(userId);
+      }
+    });
+
+    await chat.save();
+
+    res.status(200).json(await populateChat(chat._id));
+  } catch (error) {
+    res.status(500).json({
+      message: error.message,
+    });
+  }
+};
+
+export const removeUsersFromGroup = async (req, res) => {
+  try {
+    const { chatId } = req.params;
+    const usersToRemove = getUniqueValidUserIds(parseUserIds(req.body.users));
+
+    if (!mongoose.Types.ObjectId.isValid(chatId)) {
+      return res.status(400).json({ message: "Invalid chatId" });
+    }
+
+    if (!usersToRemove.length) {
+      return res.status(400).json({ message: "users are required" });
+    }
+
+    const chat = await Chat.findOne({
+      _id: chatId,
+      isGroup: true,
+    });
+
+    if (!chat) {
+      return res.status(404).json({ message: "Group chat not found" });
+    }
+
+    const isRemovingSelf =
+      usersToRemove.length === 1 &&
+      usersToRemove[0] === req.user._id.toString();
+
+    if (!isRemovingSelf && !isGroupAdmin(chat, req.user._id)) {
+      return res.status(403).json({
+        message: "Only group admin can remove other users",
+      });
+    }
+
+    if (usersToRemove.includes(chat.groupAdmin?.toString())) {
+      return res.status(400).json({
+        message: "Group admin cannot be removed",
+      });
+    }
+
+    chat.users = chat.users.filter(
+      (userId) => !usersToRemove.includes(userId.toString())
+    );
+
+    if (chat.users.length < 2) {
+      return res.status(400).json({
+        message: "Group must keep at least two users",
+      });
+    }
+
+    await chat.save();
+
+    res.status(200).json(await populateChat(chat._id));
+  } catch (error) {
+    res.status(500).json({
+      message: error.message,
+    });
+  }
+};
+
+export const deleteGroupChat = async (req, res) => {
+  try {
+    const { chatId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(chatId)) {
+      return res.status(400).json({ message: "Invalid chatId" });
+    }
+
+    const chat = await Chat.findOne({
+      _id: chatId,
+      isGroup: true,
+    });
+
+    if (!chat) {
+      return res.status(404).json({ message: "Group chat not found" });
+    }
+
+    if (!isGroupAdmin(chat, req.user._id)) {
+      return res.status(403).json({ message: "Only group admin can delete group" });
+    }
+
+    await Message.deleteMany({ chatId: chat._id });
+    await Chat.deleteOne({ _id: chat._id });
+
+    res.status(200).json({
+      success: true,
+      message: "Group deleted successfully",
+      chatId,
     });
   } catch (error) {
     res.status(500).json({

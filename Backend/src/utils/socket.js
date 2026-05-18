@@ -57,11 +57,20 @@ const getDirectChatForSocket = async (userId, receiverId, chatId) => {
   if (chatId) {
     const chat = await Chat.findOne({
       _id: chatId,
-      isGroup: false,
       users: userId,
     });
 
     if (!chat) return null;
+
+    if (chat.isGroup) {
+      return {
+        chat,
+        isGroup: true,
+        receiverId: null,
+        roomId: chat._id.toString(),
+        recipients: chat.users.map((participantId) => participantId.toString()),
+      };
+    }
 
     const receiver = chat.users.find(
       (participantId) => participantId.toString() !== userId
@@ -69,15 +78,23 @@ const getDirectChatForSocket = async (userId, receiverId, chatId) => {
 
     return {
       chat,
+      isGroup: false,
       receiverId: receiver?.toString() || receiverId,
+      roomId: generateChatRoomId(userId, receiver?.toString() || receiverId),
+      recipients: chat.users.map((participantId) => participantId.toString()),
     };
   }
 
   const chat = await findOrCreateDirectChat(userId, receiverId);
 
+  if (!chat) return null;
+
   return {
     chat,
+    isGroup: false,
     receiverId,
+    roomId: generateChatRoomId(userId, receiverId),
+    recipients: [userId, receiverId],
   };
 };
 
@@ -118,13 +135,13 @@ io.on("connection", (socket) => {
       try {
         const directChat = await getDirectChatForSocket(userId, receiverId, chatId);
 
-        if (!directChat?.chat || !directChat.receiverId) {
+        if (!directChat?.chat) {
           return socket.emit("socketError", {
             message: "Chat not found",
           });
         }
 
-        const roomId = generateChatRoomId(userId, directChat.receiverId);
+        const roomId = directChat.roomId;
 
         socket.join(roomId);
         socket.join(directChat.chat._id.toString());
@@ -132,6 +149,7 @@ io.on("connection", (socket) => {
         socket.emit("chatJoined", {
           roomId,
           chatId: directChat.chat._id,
+          isGroup: directChat.isGroup,
         });
 
         console.log(`${userId} joined room ${roomId}`);
@@ -146,32 +164,33 @@ io.on("connection", (socket) => {
 
     socket.on("sendMessage", async (data) => {
       try {
-        const { receiverId, chatId, content,} = data;
+        const { receiverId, chatId, content, image = null } = data;
 
-        if (!content && !media) {
+        if (!content && !image) {
           return socket.emit("socketError", {
-            message: "Message content or media is required",
+            message: "Message content or image is required",
           });
         }
 
         const directChat = await getDirectChatForSocket(userId, receiverId, chatId);
 
-        if (!directChat?.chat || !directChat.receiverId) {
+        if (!directChat?.chat) {
           return socket.emit("socketError", {
             message: "Chat not found",
           });
         }
 
-        const roomId = generateChatRoomId(userId, directChat.receiverId);
-        const isReceiverOnline = onlineUsers.has(directChat.receiverId);
+        const roomId = directChat.roomId;
+        const isReceiverOnline =
+          !directChat.isGroup && onlineUsers.has(directChat.receiverId);
 
         // save message
         const newMessage = await Message.create({
           sender: userId,
-          receiver: directChat.receiverId,
+          receiver: directChat.isGroup ? undefined : directChat.receiverId,
           message: content,
           chatId: directChat.chat._id,
-          image: typeof media === "string" ? media : media?.url,
+          image,
           roomId,
           delivered: isReceiverOnline,
           seen: false,
@@ -183,28 +202,28 @@ io.on("connection", (socket) => {
         const messagePayload = {
           _id: newMessage._id,
           sender: userId,
-          receiver: directChat.receiverId,
+          receiver: directChat.isGroup ? null : directChat.receiverId,
           message: newMessage.message,
-          media: newMessage.media,
           image: newMessage.image,
           chatId: directChat.chat._id,
           roomId,
+          isGroup: directChat.isGroup,
           delivered: newMessage.delivered,
           seen: false,
           createdAt: newMessage.createdAt,
         };
 
         // send message to room
-        io.to(roomId)
-          .to(directChat.chat._id.toString())
-          .to(directChat.receiverId)
-          .to(userId)
-          .emit("receiveMessage", messagePayload);
+        let messageEmitter = io.to(roomId).to(directChat.chat._id.toString());
+        directChat.recipients.forEach((recipientId) => {
+          messageEmitter = messageEmitter.to(recipientId);
+        });
+        messageEmitter.emit("receiveMessage", messagePayload);
 
         // update recent chats instantly
-        io.to(directChat.receiverId).emit("conversationUpdated", messagePayload);
-
-        io.to(userId).emit("conversationUpdated", messagePayload);
+        directChat.recipients.forEach((recipientId) => {
+          io.to(recipientId).emit("conversationUpdated", messagePayload);
+        });
 
       } catch (error) {
         console.log("Send Message Error:", error.message);
@@ -219,24 +238,36 @@ io.on("connection", (socket) => {
        TYPING INDICATOR
     ========================= */
 
-    socket.on("typing", ({ receiverId }) => {
+    socket.on("typing", async ({ receiverId, chatId }) => {
       try {
-        const roomId = generateChatRoomId(userId, receiverId);
+        const chatContext = await getDirectChatForSocket(userId, receiverId, chatId);
+
+        if (!chatContext?.chat) return;
+
+        const roomId = chatContext.roomId;
 
         socket.to(roomId).emit("typing", {
           senderId: userId,
+          chatId: chatContext.chat._id,
+          isGroup: chatContext.isGroup,
         });
       } catch (error) {
         console.log("Typing Error:", error.message);
       }
     });
 
-    socket.on("stopTyping", ({ receiverId }) => {
+    socket.on("stopTyping", async ({ receiverId, chatId }) => {
       try {
-        const roomId = generateChatRoomId(userId, receiverId);
+        const chatContext = await getDirectChatForSocket(userId, receiverId, chatId);
+
+        if (!chatContext?.chat) return;
+
+        const roomId = chatContext.roomId;
 
         socket.to(roomId).emit("stopTyping", {
           senderId: userId,
+          chatId: chatContext.chat._id,
+          isGroup: chatContext.isGroup,
         });
       } catch (error) {
         console.log("Stop Typing Error:", error.message);
