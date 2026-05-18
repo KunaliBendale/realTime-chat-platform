@@ -8,6 +8,7 @@ export const dummyChats = [
     lastMessage: "I shared the final screens for review.",
     lastMessageAt: "10:42 AM",
     unreadCount: 2,
+    isGroup: false,
     messages: [
       {
         id: "m1",
@@ -41,6 +42,7 @@ export const dummyChats = [
     lastMessage: "Priya: Backend routes are ready.",
     lastMessageAt: "9:18 AM",
     unreadCount: 0,
+    isGroup: true,
     messages: [
       {
         id: "m4",
@@ -74,6 +76,7 @@ export const dummyChats = [
     lastMessage: "Can we keep the input compact on mobile?",
     lastMessageAt: "Yesterday",
     unreadCount: 1,
+    isGroup: false,
     messages: [
       {
         id: "m7",
@@ -100,6 +103,7 @@ export const dummyChats = [
     lastMessage: "Build is green after the package update.",
     lastMessageAt: "Mon",
     unreadCount: 0,
+    isGroup: true,
     messages: [
       {
         id: "m9",

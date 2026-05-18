@@ -1,6 +1,13 @@
 import { ChatAvatar } from "./ChatAvatar";
 
-export function RecentChats({ chats, selectedChatId, onSelectChat }) {
+export function RecentChats({
+  chats,
+  selectedChat,
+  selectedChatId,
+  isLoading,
+  actionsSlot,
+  onSelectChat,
+}) {
   return (
     <aside className="flex h-full min-h-0 flex-col border-[#d9dee8] bg-white lg:border-r">
       <div className="border-b border-[#d9dee8] px-4 py-4 sm:px-5">
@@ -30,8 +37,22 @@ export function RecentChats({ chats, selectedChatId, onSelectChat }) {
         </label>
       </div>
 
+      {actionsSlot}
+
       <div className="min-h-0 flex-1 overflow-x-auto border-b border-[#d9dee8] lg:overflow-y-auto lg:border-b-0">
         <div className="flex gap-3 p-3 lg:block lg:space-y-1 lg:p-2">
+          {isLoading ? (
+            <div className="min-w-[280px] border border-[#d9dee8] bg-[#f7f8fb] p-4 text-sm text-[#66758c] lg:min-w-0">
+              Loading chats...
+            </div>
+          ) : null}
+
+          {!isLoading && chats.length === 0 ? (
+            <div className="min-w-[280px] border border-[#d9dee8] bg-[#f7f8fb] p-4 text-sm text-[#66758c] lg:min-w-0">
+              No conversations yet.
+            </div>
+          ) : null}
+
           {chats.map((chat) => {
             const isSelected = selectedChatId === chat.id;
 
@@ -58,7 +79,7 @@ export function RecentChats({ chats, selectedChatId, onSelectChat }) {
                     </span>
                   </span>
                   <span className="mt-1 block truncate text-xs text-[#66758c]">
-                    {chat.role}
+                    {selectedChat?.id === chat.id && chat.isGroup ? "Selected group" : chat.role}
                   </span>
                   <span className="mt-2 flex items-center justify-between gap-3">
                     <span className="truncate text-sm text-[#4c5b70]">

@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { AuthAlert } from "../components/auth/AuthAlert";
 import { AuthShell } from "../components/auth/AuthShell";
 import { FormField } from "../components/auth/FormField";
+import { GoogleAuthButton } from "../components/auth/GoogleAuthButton";
 import { useAuthStore } from "../store/authStore";
 
 const initialForm = {
@@ -178,6 +179,16 @@ export function RegisterPage() {
           {isSubmitting ? "Creating account..." : "Create account"}
         </button>
       </form>
+
+      <div className="my-5 flex items-center gap-3">
+        <div className="h-px flex-1 bg-[#d9dee8]" />
+        <span className="text-xs font-semibold uppercase tracking-[0.14em] text-[#66758c]">
+          or
+        </span>
+        <div className="h-px flex-1 bg-[#d9dee8]" />
+      </div>
+
+      <GoogleAuthButton label="Sign up with Google" />
 
       <p className="mt-6 text-center text-sm text-[#5d6b82]">
         Already registered?{" "}

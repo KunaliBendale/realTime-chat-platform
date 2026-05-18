@@ -7,7 +7,9 @@ export function ChatHeader({ chat }) {
         <ChatAvatar initials={chat.avatar} status={chat.status} />
         <div className="min-w-0">
           <h2 className="truncate text-base font-semibold text-[#172033]">{chat.name}</h2>
-          <p className="truncate text-sm text-[#66758c]">{chat.status}</p>
+          <p className="truncate text-sm text-[#66758c]">
+            {chat.isGroup ? chat.role : chat.status}
+          </p>
         </div>
       </div>
 

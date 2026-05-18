@@ -18,6 +18,7 @@ export function MessageBubble({ message }) {
           }`}
         >
           {message.time}
+          {message.isOptimistic ? " · pending" : ""}
         </p>
       </div>
     </div>
