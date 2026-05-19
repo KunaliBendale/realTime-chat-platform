@@ -94,6 +94,37 @@ export const useAuthStore = create((set) => ({
     }
   },
 
+  completeOAuthLogin: ({ token, user }) => {
+    if (!token || !user) {
+      const message = "Google sign-in response is missing authentication data";
+
+      set({
+        token: null,
+        user: null,
+        isAuthenticated: false,
+        status: "unauthenticated",
+        error: message,
+        successMessage: null,
+      });
+
+      return { success: false, message };
+    }
+
+    tokenStorage.setToken(token);
+    tokenStorage.setUser(user);
+
+    set({
+      token,
+      user,
+      isAuthenticated: true,
+      status: "authenticated",
+      error: null,
+      successMessage: "Signed in with Google",
+    });
+
+    return { success: true };
+  },
+
   logout: () => {
     tokenStorage.clearAuth();
 

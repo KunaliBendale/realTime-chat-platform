@@ -26,6 +26,7 @@ export function LoginPage() {
   const isSubmitting = status === "loading";
   const redirectTo = location.state?.from?.pathname || "/dashboard";
   const registrationMessage = location.state?.message;
+  const oauthError = new URLSearchParams(location.search).get("oauthError");
 
   const alertMessage = useMemo(
     () => registrationMessage || successMessage,
@@ -87,7 +88,7 @@ export function LoginPage() {
     >
       <form className="space-y-5" onSubmit={handleSubmit} noValidate>
         <AuthAlert type="success" message={alertMessage} />
-        <AuthAlert message={error} />
+        <AuthAlert message={oauthError || error} />
 
         <FormField
           id="email"

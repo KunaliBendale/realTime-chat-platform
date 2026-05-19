@@ -3,11 +3,13 @@ import { AuthSessionListener } from "./components/auth/AuthSessionListener";
 import { SocketBridge } from "./components/chat/SocketBridge";
 import { AppLayout } from "./components/layout/AppLayout";
 import { DashboardPage } from "./pages/DashboardPage";
+import { GoogleOAuthCallbackPage } from "./pages/GoogleOAuthCallbackPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { ProtectedRoute } from "./routes/ProtectedRoute";
 import { PublicRoute } from "./routes/PublicRoute";
+
 
 function App() {
   return (
@@ -15,9 +17,12 @@ function App() {
       <AuthSessionListener />
       <SocketBridge />
       <Routes>
+        <Route path="/auth/google/callback" element={<GoogleOAuthCallbackPage />} />
+
         <Route element={<PublicRoute />}>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          
         </Route>
 
         <Route element={<ProtectedRoute />}>
