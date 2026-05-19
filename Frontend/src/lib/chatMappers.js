@@ -83,3 +83,11 @@ export const createOptimisticMessage = ({ chatId, content, image, currentUser })
     isOptimistic: true,
   };
 };
+
+export const getSocketRecipientId = (chat, currentUserId) => {
+  if (!chat || chat.isGroup) return null;
+
+  const otherParticipant = getOtherParticipant(chat.raw || chat, currentUserId);
+
+  return otherParticipant?._id || otherParticipant?.id || otherParticipant || null;
+};

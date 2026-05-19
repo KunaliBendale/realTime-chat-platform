@@ -12,8 +12,8 @@ export function AppLayout() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f7f8fb] text-[#172033]">
-      <header className="border-b border-[#d9dee8] bg-white">
+    <div className="flex h-screen flex-col bg-[#f7f8fb] text-[#172033]">
+      <header className="shrink-0 border-b border-[#d9dee8] bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#2563eb]">
@@ -38,7 +38,9 @@ export function AppLayout() {
         </div>
       </header>
 
-      <Outlet />
+      <div className="min-h-0 flex-1">
+        <Outlet />
+      </div>
     </div>
   );
 }

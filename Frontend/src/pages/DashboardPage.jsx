@@ -1,8 +1,10 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChatActions } from "../components/chat/ChatActions";
 import { ChatPanel } from "../components/chat/ChatPanel";
 import { RecentChats } from "../components/chat/RecentChats";
 import { dummyChats } from "../data/dummyChats";
+import { getSocketRecipientId } from "../lib/chatMappers";
+import { socketService } from "../services/socketService";
 import { useAuthStore } from "../store/authStore";
 import { useChatStore } from "../store/chatStore";
 
@@ -10,27 +12,37 @@ export function DashboardPage() {
   const token = useAuthStore((state) => state.token);
   const chats = useChatStore((state) => state.chats);
   const selectedChatId = useChatStore((state) => state.selectedChatId);
+  const contacts = useChatStore((state) => state.contacts);
   const messagesByChatId = useChatStore((state) => state.messagesByChatId);
   const isUsingPreviewData = useChatStore((state) => state.isUsingPreviewData);
   const isChatsLoading = useChatStore((state) => state.isChatsLoading);
   const isMessagesLoading = useChatStore((state) => state.isMessagesLoading);
+  const isContactsLoading = useChatStore((state) => state.isContactsLoading);
   const actionLoading = useChatStore((state) => state.actionLoading);
   const error = useChatStore((state) => state.error);
+  const socketStatus = useChatStore((state) => state.socketStatus);
+  const typingByChatId = useChatStore((state) => state.typingByChatId);
+  const userSearchResults = useChatStore((state) => state.userSearchResults);
+  const isUserSearchLoading = useChatStore((state) => state.isUserSearchLoading);
   const fetchChats = useChatStore((state) => state.fetchChats);
+  const fetchContacts = useChatStore((state) => state.fetchContacts);
   const openConversation = useChatStore((state) => state.openConversation);
   const accessChat = useChatStore((state) => state.accessChat);
+  const addContact = useChatStore((state) => state.addContact);
+  const searchUsers = useChatStore((state) => state.searchUsers);
   const createGroup = useChatStore((state) => state.createGroup);
-  const updateGroup = useChatStore((state) => state.updateGroup);
-  const addUsersToGroup = useChatStore((state) => state.addUsersToGroup);
-  const removeUsersFromGroup = useChatStore((state) => state.removeUsersFromGroup);
-  const deleteGroup = useChatStore((state) => state.deleteGroup);
   const prepareOptimisticMessage = useChatStore(
     (state) => state.prepareOptimisticMessage,
   );
+  const sendMessageWithRest = useChatStore((state) => state.sendMessageWithRest);
+  const user = useAuthStore((state) => state.user);
+  const currentUserId = user?._id || user?.id;
+  const [activeChatAction, setActiveChatAction] = useState(null);
 
   useEffect(() => {
     fetchChats();
-  }, [fetchChats, token]);
+    fetchContacts();
+  }, [fetchChats, fetchContacts, token]);
 
   useEffect(() => {
     if (!selectedChatId && dummyChats[0]?.id) {
@@ -61,8 +73,59 @@ export function DashboardPage() {
     [chats.length, messagesByChatId, selectedChat],
   );
 
+  useEffect(() => {
+    if (!selectedChat || !token || !chats.length) return;
+
+    socketService.joinChat({
+      chatId: selectedChat.id,
+      receiverId: getSocketRecipientId(selectedChat, currentUserId),
+    });
+  }, [chats.length, currentUserId, selectedChat, token]);
+
+  const isTyping = Boolean(
+    selectedChat &&
+      (typingByChatId[selectedChat.id] ||
+        typingByChatId[getSocketRecipientId(selectedChat, currentUserId)]),
+  );
+
+  const handleSendMessage = ({ chat, content, image, clientTempId }) => {
+    const sent = socketService.sendMessage({
+      chatId: chat.isGroup ? chat.id : undefined,
+      receiverId: getSocketRecipientId(chat, currentUserId),
+      content,
+      image,
+      clientTempId,
+    });
+
+    if (!sent && chats.length) {
+      sendMessageWithRest({
+        chatId: chat.id,
+        receiverId: getSocketRecipientId(chat, currentUserId),
+        content,
+        image,
+        clientTempId,
+      });
+    }
+
+    return sent;
+  };
+
+  const handleTyping = (chat) => {
+    socketService.sendTyping({
+      chatId: chat.isGroup ? chat.id : undefined,
+      receiverId: getSocketRecipientId(chat, currentUserId),
+    });
+  };
+
+  const handleStopTyping = (chat) => {
+    socketService.stopTyping({
+      chatId: chat.isGroup ? chat.id : undefined,
+      receiverId: getSocketRecipientId(chat, currentUserId),
+    });
+  };
+
   return (
-    <main className="h-[100dvh] overflow-hidden bg-[#edf1f7] text-[#172033]">
+    <main className="h-full overflow-hidden bg-[#edf1f7] text-[#172033]">
       <div className="mx-auto flex h-full max-w-7xl flex-col border-x border-[#d9dee8] bg-white lg:flex-row">
         <div className="h-[360px] shrink-0 lg:h-full lg:w-[390px]">
           <RecentChats
@@ -70,21 +133,11 @@ export function DashboardPage() {
             selectedChat={selectedChat}
             selectedChatId={selectedChat?.id}
             isLoading={isChatsLoading}
+            contacts={contacts}
+            isContactsLoading={isContactsLoading}
             onSelectChat={openConversation}
-            actionsSlot={
-              <ChatActions
-                key={selectedChat?.id || "no-chat"}
-                selectedChat={selectedChat}
-                actionLoading={actionLoading}
-                hasToken={Boolean(token)}
-                onAccessChat={accessChat}
-                onCreateGroup={createGroup}
-                onUpdateGroup={updateGroup}
-                onAddUsers={addUsersToGroup}
-                onRemoveUsers={removeUsersFromGroup}
-                onDeleteGroup={deleteGroup}
-              />
-            }
+            onStartContactChat={accessChat}
+            onOpenAction={setActiveChatAction}
           />
         </div>
 
@@ -99,10 +152,29 @@ export function DashboardPage() {
             chat={selectedChat}
             messages={messages}
             isLoading={isMessagesLoading}
+            socketStatus={socketStatus}
+            isTyping={isTyping}
             onPrepareOptimisticMessage={prepareOptimisticMessage}
+            onSendMessage={handleSendMessage}
+            onTyping={handleTyping}
+            onStopTyping={handleStopTyping}
           />
         </div>
       </div>
+
+      <ChatActions
+        activeAction={activeChatAction}
+        actionLoading={actionLoading}
+        hasToken={Boolean(token)}
+        savedContacts={contacts}
+        onClose={() => setActiveChatAction(null)}
+        onAddContact={addContact}
+        onAccessChat={accessChat}
+        onSearchUsers={searchUsers}
+        userSearchResults={userSearchResults}
+        isUserSearchLoading={isUserSearchLoading}
+        onCreateGroup={createGroup}
+      />
     </main>
   );
 }

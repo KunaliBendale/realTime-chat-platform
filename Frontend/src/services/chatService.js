@@ -19,6 +19,15 @@ export const chatService = {
     return response.data;
   },
 
+  async searchUsers(search = "") {
+    const response = await api.get("/chat/users", {
+      params: {
+        search,
+      },
+    });
+    return response.data;
+  },
+
   async accessChat(userId) {
     const response = await api.post("/chat/accessChat", { userId });
     return response.data;
@@ -32,6 +41,11 @@ export const chatService = {
       },
     });
 
+    return response.data;
+  },
+
+  async sendMessage(chatId, payload) {
+    const response = await api.post(`/chat/${chatId}/messages`, payload);
     return response.data;
   },
 

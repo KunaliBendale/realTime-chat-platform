@@ -1,6 +1,6 @@
 import { ChatAvatar } from "./ChatAvatar";
 
-export function ChatHeader({ chat }) {
+export function ChatHeader({ chat, socketStatus, isTyping }) {
   return (
     <header className="flex items-center justify-between gap-4 border-b border-[#d9dee8] bg-white px-4 py-3 sm:px-5">
       <div className="flex min-w-0 items-center gap-3">
@@ -8,7 +8,9 @@ export function ChatHeader({ chat }) {
         <div className="min-w-0">
           <h2 className="truncate text-base font-semibold text-[#172033]">{chat.name}</h2>
           <p className="truncate text-sm text-[#66758c]">
-            {chat.isGroup ? chat.role : chat.status}
+            {isTyping
+              ? "typing..."
+              : `${chat.isGroup ? chat.role : chat.status} · socket ${socketStatus}`}
           </p>
         </div>
       </div>

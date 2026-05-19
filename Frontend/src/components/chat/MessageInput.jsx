@@ -1,6 +1,12 @@
 import { useState } from "react";
 
-export function MessageInput({ chatId, onPrepareOptimisticMessage }) {
+export function MessageInput({
+  chat,
+  onPrepareOptimisticMessage,
+  onSendMessage,
+  onTyping,
+  onStopTyping,
+}) {
   const [message, setMessage] = useState("");
   const [image, setImage] = useState("");
 
@@ -9,14 +15,32 @@ export function MessageInput({ chatId, onPrepareOptimisticMessage }) {
 
     if (!message.trim() && !image.trim()) return;
 
-    onPrepareOptimisticMessage({
-      chatId,
+    const optimisticMessage = onPrepareOptimisticMessage({
+      chatId: chat.id,
       content: message.trim(),
       image: image.trim() || null,
     });
 
+    onSendMessage({
+      chat,
+      content: message.trim(),
+      image: image.trim() || null,
+      clientTempId: optimisticMessage.id,
+    });
+
     setMessage("");
     setImage("");
+    onStopTyping(chat);
+  };
+
+  const handleMessageChange = (event) => {
+    setMessage(event.target.value);
+
+    if (event.target.value.trim()) {
+      onTyping(chat);
+    } else {
+      onStopTyping(chat);
+    }
   };
 
   return (
@@ -40,7 +64,8 @@ export function MessageInput({ chatId, onPrepareOptimisticMessage }) {
           <textarea
             rows={1}
             value={message}
-            onChange={(event) => setMessage(event.target.value)}
+            onChange={handleMessageChange}
+            onBlur={() => onStopTyping(chat)}
             placeholder="Type a message"
             className="max-h-28 min-h-11 w-full resize-none border border-[#cfd6e3] bg-[#f7f8fb] px-3 py-2.5 text-sm text-[#172033] outline-none placeholder:text-[#8b97aa] focus:border-[#2563eb]"
           />

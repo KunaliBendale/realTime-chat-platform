@@ -2,7 +2,17 @@ import { ChatHeader } from "./ChatHeader";
 import { MessageArea } from "./MessageArea";
 import { MessageInput } from "./MessageInput";
 
-export function ChatPanel({ chat, messages, isLoading, onPrepareOptimisticMessage }) {
+export function ChatPanel({
+  chat,
+  messages,
+  isLoading,
+  socketStatus,
+  isTyping,
+  onPrepareOptimisticMessage,
+  onSendMessage,
+  onTyping,
+  onStopTyping,
+}) {
   if (!chat) {
     return (
       <section className="flex min-h-0 flex-1 items-center justify-center bg-[#f7f8fb] p-6 text-center">
@@ -20,9 +30,15 @@ export function ChatPanel({ chat, messages, isLoading, onPrepareOptimisticMessag
 
   return (
     <section className="flex min-h-0 flex-1 flex-col bg-white">
-      <ChatHeader chat={chat} />
+      <ChatHeader chat={chat} socketStatus={socketStatus} isTyping={isTyping} />
       <MessageArea messages={messages} isLoading={isLoading} />
-      <MessageInput chatId={chat.id} onPrepareOptimisticMessage={onPrepareOptimisticMessage} />
+      <MessageInput
+        chat={chat}
+        onPrepareOptimisticMessage={onPrepareOptimisticMessage}
+        onSendMessage={onSendMessage}
+        onTyping={onTyping}
+        onStopTyping={onStopTyping}
+      />
     </section>
   );
 }
