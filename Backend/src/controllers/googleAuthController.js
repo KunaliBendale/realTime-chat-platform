@@ -13,6 +13,27 @@ const GOOGLE_TOKEN_URL =
 const GOOGLE_USER_INFO_URL =
   "https://www.googleapis.com/oauth2/v3/userinfo";
 
+const getClientRedirectBase = () => {
+  const configuredClientUrl = process.env.CLIENT_URL?.split(",")[0]?.trim();
+  return configuredClientUrl || "http://localhost:5173";
+};
+
+const redirectToClient = (res, path, params = {}) => {
+  const url = new URL(path, getClientRedirectBase());
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      url.searchParams.set(key, value);
+    }
+  });
+
+  return res.redirect(url.toString());
+};
+
+const shouldReturnJson = (req) => {
+  return req.query.format === "json" || req.get("accept") === "application/json";
+};
+
 /**
  * Exchange authorization code for Google user profile
  */
@@ -65,20 +86,21 @@ export const loginWithGoogle = async (req, res) => {
   try {
     // Random state for CSRF protection
     const state = Math.random().toString(36).substring(2);
+    const isProduction = process.env.NODE_ENV === "production";
 
     // Store state in secure cookie
     res.cookie("oauth_state", state, {
       httpOnly: true,
-      secure: false, // localhost only
+      secure: isProduction,
       maxAge: 10 * 60 * 1000, // 10 mins
-       sameSite: "lax",
+      sameSite: "lax",
     });
 
     const params = {
       client_id: process.env.CLIENT_ID,
       redirect_uri: process.env.GOOGLE_CALLBACK_URL,
       response_type: "code",
-      scope:  "openid email profile",
+      scope: "openid email profile",
       access_type: "offline",
       prompt: "consent",
       state,
@@ -107,6 +129,12 @@ export const googleCallback = async (req, res) => {
 
     // OAuth error from Google
     if (error) {
+      if (!shouldReturnJson(req)) {
+        return redirectToClient(res, "/login", {
+          oauthError: error,
+        });
+      }
+
       return res.status(400).json({
         success: false,
         message: error,
@@ -114,6 +142,12 @@ export const googleCallback = async (req, res) => {
     }
 
     if (!code) {
+      if (!shouldReturnJson(req)) {
+        return redirectToClient(res, "/login", {
+          oauthError: "Authorization code missing",
+        });
+      }
+
       return res.status(400).json({
         success: false,
         message: "Authorization code missing",
@@ -124,6 +158,12 @@ export const googleCallback = async (req, res) => {
     const storedState = req.cookies?.oauth_state;
 
     if (!storedState || storedState !== state) {
+      if (!shouldReturnJson(req)) {
+        return redirectToClient(res, "/login", {
+          oauthError: "Invalid OAuth state",
+        });
+      }
+
       return res.status(400).json({
         success: false,
         message: "Invalid OAuth state",
@@ -135,8 +175,14 @@ export const googleCallback = async (req, res) => {
 
     // Get Google user
     const googleUser = await exchangeCodeForUserProfile(code);
-    
+
     if (!googleUser.email_verified) {
+      if (!shouldReturnJson(req)) {
+        return redirectToClient(res, "/login", {
+          oauthError: "Google email not verified",
+        });
+      }
+
       return res.status(400).json({
         success: false,
         message: "Google email not verified",
@@ -153,7 +199,7 @@ export const googleCallback = async (req, res) => {
         },
       ],
     });
-  
+
 
     // Create user if doesn't exist
     if (!user) {
@@ -163,7 +209,7 @@ export const googleCallback = async (req, res) => {
           googleUser.name?.split(" ")[0] ||
           "User",
 
-      
+
         email: googleUser.email,
 
         profilePic: googleUser.picture,
@@ -195,6 +241,25 @@ export const googleCallback = async (req, res) => {
 
     // Generate JWT
     const token = generateToken(user._id);
+    const authUser = {
+      id: user._id,
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      profilePic: user.profilePic,
+    };
+
+    if (!shouldReturnJson(req)) {
+      const callbackUrl = new URL("/auth/google/callback", getClientRedirectBase());
+      const fragmentParams = new URLSearchParams({
+        token,
+        user: JSON.stringify(authUser),
+      });
+
+      callbackUrl.hash = fragmentParams.toString();
+      
+      return res.redirect(callbackUrl.toString());
+    }
 
     return res.status(200).json({
       success: true,
@@ -202,18 +267,19 @@ export const googleCallback = async (req, res) => {
 
       token,
 
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        profilePic: user.profilePic,
-      },
+      user: authUser,
     });
   } catch (error) {
     console.error(
       "Google Callback Error:",
       error.response?.data || error.message
     );
+
+    if (!shouldReturnJson(req)) {
+      return redirectToClient(res, "/login", {
+        oauthError: "Google authentication failed",
+      });
+    }
 
     return res.status(500).json({
       success: false,

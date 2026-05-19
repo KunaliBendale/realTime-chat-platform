@@ -108,8 +108,6 @@ io.on("connection", (socket) => {
     const user = socket.user;
     const userId = user.userId;
 
-    console.log("User Connected:", userId);
-
     /* =========================
        STORE ONLINE USER
     ========================= */
@@ -477,7 +475,6 @@ io.on("connection", (socket) => {
     ========================= */
 
     socket.on("disconnect", () => {
-      console.log("User Disconnected:", userId);
 
       const stillOnline = removeOnlineSocket(userId, socket.id);
 
