@@ -1,14 +1,23 @@
 import { Server } from "socket.io";
 import http from "http";
 import express from "express";
+import dotenv from "dotenv";
 
-import Chat from "../models/chatModel.js";
 import Message from "../models/messageModel.js";
 import socketAuthMiddleware from "../middleware/socket.auth.middleware.js";
-import { findOrCreateDirectChat } from "../controllers/chatController.js";
+import { resolveChatForMessage } from "../controllers/chatController.js";
+
+dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
+const allowedSocketOrigins = process.env.CLIENT_URL
+  ? [
+      ...process.env.CLIENT_URL.split(",").map((origin) => origin.trim()),
+      "http://localhost:5173",
+      "http://127.0.0.1:5173",
+    ]
+  : ["http://localhost:5173", "http://127.0.0.1:5173"];
 
 /* =========================
    SOCKET IO CONFIG
@@ -16,7 +25,7 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: allowedSocketOrigins,
     credentials: true,
   },
    transports: ["websocket", "polling"],
@@ -32,7 +41,7 @@ io.use(socketAuthMiddleware);
    ONLINE USERS MAP
 ========================= */
 
-// Map<userId, socketId>
+// Map<userId, Set<socketId>>
 const onlineUsers = new Map();
 
 /* =========================
@@ -40,7 +49,7 @@ const onlineUsers = new Map();
 ========================= */
 
 export const getReceiverSocketId = (userId) => {
-  return onlineUsers.get(userId);
+  return Array.from(onlineUsers.get(userId) || []);
 };
 
 /* =========================
@@ -51,52 +60,44 @@ const generateChatRoomId = (user1, user2) => {
   return [user1, user2].sort().join("_");
 };
 
-const getDirectChatForSocket = async (userId, receiverId, chatId) => {
-  if (!chatId && !receiverId) return null;
+const getChatForSocket = async (userId, receiverId, chatId) => {
+  const chatContext = await resolveChatForMessage({
+    chatId,
+    senderId: userId,
+    receiverId,
+  });
 
-  if (chatId) {
-    const chat = await Chat.findOne({
-      _id: chatId,
-      users: userId,
-    });
-
-    if (!chat) return null;
-
-    if (chat.isGroup) {
-      return {
-        chat,
-        isGroup: true,
-        receiverId: null,
-        roomId: chat._id.toString(),
-        recipients: chat.users.map((participantId) => participantId.toString()),
-      };
-    }
-
-    const receiver = chat.users.find(
-      (participantId) => participantId.toString() !== userId
-    );
-
-    return {
-      chat,
-      isGroup: false,
-      receiverId: receiver?.toString() || receiverId,
-      roomId: generateChatRoomId(userId, receiver?.toString() || receiverId),
-      recipients: chat.users.map((participantId) => participantId.toString()),
-    };
-  }
-
-  const chat = await findOrCreateDirectChat(userId, receiverId);
-
-  if (!chat) return null;
+  if (!chatContext?.chat) return null;
 
   return {
-    chat,
-    isGroup: false,
-    receiverId,
-    roomId: generateChatRoomId(userId, receiverId),
-    recipients: [userId, receiverId],
+    ...chatContext,
+    isGroup: chatContext.chat.isGroup,
+    recipients: chatContext.chat.users.map((participantId) => participantId.toString()),
   };
 };
+
+const addOnlineSocket = (userId, socketId) => {
+  if (!onlineUsers.has(userId)) {
+    onlineUsers.set(userId, new Set());
+  }
+
+  onlineUsers.get(userId).add(socketId);
+};
+
+const removeOnlineSocket = (userId, socketId) => {
+  const sockets = onlineUsers.get(userId);
+
+  if (!sockets) return false;
+
+  sockets.delete(socketId);
+
+  if (sockets.size) return true;
+
+  onlineUsers.delete(userId);
+  return false;
+};
+
+const getOnlineUserIds = () => Array.from(onlineUsers.keys());
 
 /* =========================
    SOCKET CONNECTION
@@ -113,13 +114,13 @@ io.on("connection", (socket) => {
        STORE ONLINE USER
     ========================= */
 
-    onlineUsers.set(userId, socket.id);
+    addOnlineSocket(userId, socket.id);
 
     // personal room
     socket.join(userId);
 
     // send all online users
-    io.emit("onlineUsers", Array.from(onlineUsers.keys()));
+    io.emit("onlineUsers", getOnlineUserIds());
 
     // user online event
     io.emit("userStatus", {
@@ -133,7 +134,7 @@ io.on("connection", (socket) => {
 
     socket.on("joinChat", async ({ receiverId, chatId }) => {
       try {
-        const directChat = await getDirectChatForSocket(userId, receiverId, chatId);
+        const directChat = await getChatForSocket(userId, receiverId, chatId);
 
         if (!directChat?.chat) {
           return socket.emit("socketError", {
@@ -152,7 +153,7 @@ io.on("connection", (socket) => {
           isGroup: directChat.isGroup,
         });
 
-        console.log(`${userId} joined room ${roomId}`);
+        
       } catch (error) {
         console.log("Join Chat Error:", error.message);
       }
@@ -164,7 +165,7 @@ io.on("connection", (socket) => {
 
     socket.on("sendMessage", async (data) => {
       try {
-        const { receiverId, chatId, content, image = null } = data;
+        const { receiverId, chatId, content, image = null, clientTempId = null } = data;
 
         if (!content && !image) {
           return socket.emit("socketError", {
@@ -172,7 +173,7 @@ io.on("connection", (socket) => {
           });
         }
 
-        const directChat = await getDirectChatForSocket(userId, receiverId, chatId);
+        const directChat = await getChatForSocket(userId, receiverId, chatId);
 
         if (!directChat?.chat) {
           return socket.emit("socketError", {
@@ -185,7 +186,7 @@ io.on("connection", (socket) => {
           !directChat.isGroup && onlineUsers.has(directChat.receiverId);
 
         // save message
-        const newMessage = await Message.create({
+        const createdMessage = await Message.create({
           sender: userId,
           receiver: directChat.isGroup ? undefined : directChat.receiverId,
           message: content,
@@ -193,24 +194,31 @@ io.on("connection", (socket) => {
           image,
           roomId,
           delivered: isReceiverOnline,
+          deliveredAt: isReceiverOnline ? new Date() : undefined,
           seen: false,
         });
 
-        directChat.chat.latestMessage = newMessage._id;
+        directChat.chat.latestMessage = createdMessage._id;
         await directChat.chat.save();
+
+        const newMessage = await Message.findById(createdMessage._id)
+          .populate("sender", "name email profilePic")
+          .populate("receiver", "name email profilePic");
 
         const messagePayload = {
           _id: newMessage._id,
-          sender: userId,
-          receiver: directChat.isGroup ? null : directChat.receiverId,
+          sender: newMessage.sender,
+          receiver: newMessage.receiver || null,
           message: newMessage.message,
           image: newMessage.image,
           chatId: directChat.chat._id,
           roomId,
           isGroup: directChat.isGroup,
           delivered: newMessage.delivered,
+          deliveredAt: newMessage.deliveredAt,
           seen: false,
           createdAt: newMessage.createdAt,
+          clientTempId,
         };
 
         // send message to room
@@ -240,7 +248,7 @@ io.on("connection", (socket) => {
 
     socket.on("typing", async ({ receiverId, chatId }) => {
       try {
-        const chatContext = await getDirectChatForSocket(userId, receiverId, chatId);
+        const chatContext = await getChatForSocket(userId, receiverId, chatId);
 
         if (!chatContext?.chat) return;
 
@@ -258,7 +266,7 @@ io.on("connection", (socket) => {
 
     socket.on("stopTyping", async ({ receiverId, chatId }) => {
       try {
-        const chatContext = await getDirectChatForSocket(userId, receiverId, chatId);
+        const chatContext = await getChatForSocket(userId, receiverId, chatId);
 
         if (!chatContext?.chat) return;
 
@@ -471,10 +479,12 @@ io.on("connection", (socket) => {
     socket.on("disconnect", () => {
       console.log("User Disconnected:", userId);
 
-      onlineUsers.delete(userId);
+      const stillOnline = removeOnlineSocket(userId, socket.id);
 
       // updated online users
-      io.emit("onlineUsers", Array.from(onlineUsers.keys()));
+      io.emit("onlineUsers", getOnlineUserIds());
+
+      if (stillOnline) return;
 
       // offline status
       io.emit("userStatus", {

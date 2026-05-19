@@ -51,6 +51,53 @@ const isGroupAdmin = (chat, userId) => {
   return chat.groupAdmin?.toString() === userId.toString();
 };
 
+export const getRoomIdForChat = (chat, senderId, receiverId) => {
+  if (chat.isGroup) return chat._id.toString();
+
+  return [senderId.toString(), receiverId.toString()].sort().join("_");
+};
+
+export const resolveChatForMessage = async ({ chatId, senderId, receiverId }) => {
+  if (chatId) {
+    if (!mongoose.Types.ObjectId.isValid(chatId)) return null;
+
+    const chat = await Chat.findOne({
+      _id: chatId,
+      users: senderId,
+    });
+
+    if (!chat) return null;
+
+    if (chat.isGroup) {
+      return {
+        chat,
+        receiverId: null,
+        roomId: chat._id.toString(),
+      };
+    }
+
+    const receiver = chat.users.find(
+      (participantId) => participantId.toString() !== senderId.toString()
+    );
+
+    return {
+      chat,
+      receiverId: receiver?.toString() || receiverId,
+      roomId: getRoomIdForChat(chat, senderId, receiver?.toString() || receiverId),
+    };
+  }
+
+  const chat = await findOrCreateDirectChat(senderId, receiverId);
+
+  if (!chat) return null;
+
+  return {
+    chat,
+    receiverId,
+    roomId: getRoomIdForChat(chat, senderId, receiverId),
+  };
+};
+
 export const findOrCreateDirectChat = async (currentUserId, otherUserId) => {
   if (
     !otherUserId ||
@@ -126,6 +173,36 @@ export const getMyChats = async (req, res) => {
   }
 };
 
+export const getUsersForChat = async (req, res) => {
+  try {
+    const search = req.query.search || req.query.q || "";
+    const query = {
+      _id: {
+        $ne: req.user._id,
+      },
+    };
+
+    if (search.trim()) {
+      query.$or = [
+        { name: { $regex: search.trim(), $options: "i" } },
+        { email: { $regex: search.trim(), $options: "i" } },
+        { mobile: { $regex: search.trim(), $options: "i" } },
+      ];
+    }
+
+    const users = await User.find(query)
+      .select("name email mobile profilePic status")
+      .limit(20)
+      .sort({ name: 1 });
+
+    res.status(200).json(users);
+  } catch (error) {
+    res.status(500).json({
+      message: error.message,
+    });
+  }
+};
+
 export const getChatMessages = async (req, res) => {
   try {
     const { chatId } = req.params;
@@ -162,6 +239,55 @@ export const getChatMessages = async (req, res) => {
     res.status(200).json({
       messages: messages.reverse(),
       nextCursor,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: error.message,
+    });
+  }
+};
+
+export const sendMessage = async (req, res) => {
+  try {
+    const { chatId } = req.params;
+    const { receiverId, content, message, image = null, clientTempId = null } = req.body;
+    const messageText = content ?? message ?? "";
+
+    if (!messageText.trim() && !image) {
+      return res.status(400).json({ message: "Message content or image is required" });
+    }
+
+    const chatContext = await resolveChatForMessage({
+      chatId,
+      senderId: req.user._id,
+      receiverId,
+    });
+
+    if (!chatContext?.chat) {
+      return res.status(404).json({ message: "Chat not found" });
+    }
+
+    const newMessage = await Message.create({
+      sender: req.user._id,
+      receiver: chatContext.chat.isGroup ? undefined : chatContext.receiverId,
+      message: messageText.trim(),
+      image,
+      chatId: chatContext.chat._id,
+      roomId: chatContext.roomId,
+      delivered: false,
+      seen: false,
+    });
+
+    chatContext.chat.latestMessage = newMessage._id;
+    await chatContext.chat.save();
+
+    const populatedMessage = await Message.findById(newMessage._id)
+      .populate("sender", "name email profilePic")
+      .populate("receiver", "name email profilePic");
+
+    res.status(201).json({
+      ...populatedMessage.toObject(),
+      clientTempId,
     });
   } catch (error) {
     res.status(500).json({

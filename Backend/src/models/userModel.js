@@ -7,9 +7,13 @@ const userSchema = new mongoose.Schema({
     },
     mobile: {
         type: String,
-        min: 10, max: 10,
-        required: true,
+        minlength: 10,
+        maxlength: 10,
+        required: function () {
+            return !this.providers?.length;
+        },
         unique: true,
+        sparse: true,
     },
     email: {
         type: String,
@@ -19,9 +23,12 @@ const userSchema = new mongoose.Schema({
     },
     password: {
         type: String,
-        required: true,
-        min: 8,
-        max: 20
+        required: function () {
+            return !this.providers?.length;
+        },
+        minlength: 8,
+        maxlength: 100,
+        select: false,
     },
     profilePic: { type: String },
     status: {

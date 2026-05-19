@@ -5,16 +5,32 @@ import Otp from "../models/OTPModel.js";
 import { generateOtp } from "../utils/generateOtp.js";
 import transporter from "../middleware/nodeMailer.js";
 
+const buildAuthResponse = (user, token) => ({
+  message: "Authentication successful",
+  token,
+  data: {
+    _id: user._id,
+    name: user.name,
+    email: user.email,
+    mobile: user.mobile,
+    profilePic: user.profilePic,
+    status: user.status,
+    providers: user.providers,
+  },
+});
+
 export const registerUser = async (req, res) => {
     try {
-        const { name, email, password, confirmPassword, mobile, } = req.body;
-        if (!name || !email || !password) {
+        const { name, email, password, confirmPassword, mobile } = req.body;
+        if (!name || !email || !password || !confirmPassword || !mobile) {
             return res.status(400).json({ message: "Please fill all the fields" });
         }
-        const user = await User.findOne({ email });
+        const user = await User.findOne({
+            $or: [{ email: email.trim().toLowerCase() }, { mobile: mobile.trim() }],
+        }).select("+password");
 
         if (user) {
-            return res.status(400).json({ message: "User already exists with this email address." });
+            return res.status(400).json({ message: "User already exists with this email or mobile." });
         }
 
         if (password !== confirmPassword) {
@@ -22,17 +38,20 @@ export const registerUser = async (req, res) => {
         }
 
         const hashedPassword = await bcrypt.hash(password, 12);
-        const newUser = new User({
-            name,
-            email,
+        const newUser = await User.create({
+            name: name.trim(),
+            email: email.trim().toLowerCase(),
             password: hashedPassword,
-            mobile
-        })
+            mobile: mobile.trim()
+        });
 
-        newUser.save();
-        res.status(200).json("User Created Successfully");
+        const token = generateToken(newUser._id);
+        res.status(201).json({
+          ...buildAuthResponse(newUser, token),
+          message: "User Created Successfully",
+        });
     } catch (error) {
-        res.status(500).json({ message: "Error creating user" });
+        res.status(500).json({ message: error.message || "Error creating user" });
     }
 }
 
@@ -42,7 +61,7 @@ export const loginUser = async (req, res) => {
         if (!email || !password) {
             return res.status(400).json({ message: "Please fill all the fields" });
         }
-        const user = await User.findOne({ email });
+        const user = await User.findOne({ email: email.trim().toLowerCase() }).select("+password");
         if (!user) {
             return res.status(400).json({ message: "User not found" });
         }
@@ -53,11 +72,21 @@ export const loginUser = async (req, res) => {
         }
 
         const token = generateToken(user._id);
-        res.status(200).json({ message: "User Logged In Successfully", token, data: user });
+        res.status(200).json({
+          ...buildAuthResponse(user, token),
+          message: "User Logged In Successfully",
+        });
     } catch (error) {
         res.status(500).json({ message: "Error logging in user" });
     }
 }
+
+export const getMe = async (req, res) => {
+  res.status(200).json({
+    success: true,
+    data: req.user,
+  });
+};
 
 export const sendOtp = async (req, res) => {
   try {
@@ -75,7 +104,7 @@ export const sendOtp = async (req, res) => {
     );
 
     await transporter.sendMail({
-      from: `"My App" <${EMAIL_USER}>`,
+      from: `"My App" <${process.env.EMAIL_USER}>`,
       to: email,
       subject: "Your OTP Code",
       text: `Your OTP is ${otp}. It will expire in 5 minutes.`,
