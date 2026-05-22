@@ -1,14 +1,29 @@
+import { AnimatePresence, motion } from "framer-motion";
+import { AlertCircle, CheckCircle2 } from "lucide-react";
+
 export function AuthAlert({ type = "error", message }) {
-  if (!message) return null;
-
-  const styles =
-    type === "success"
-      ? "border-[#a7f3d0] bg-[#ecfdf5] text-[#065f46]"
-      : "border-[#fecaca] bg-[#fef2f2] text-[#991b1b]";
-
   return (
-    <div className={`border px-3 py-3 text-sm ${styles}`} role="alert">
-      {message}
-    </div>
+    <AnimatePresence>
+      {message ? (
+        <motion.div
+          role="alert"
+          initial={{ opacity: 0, y: -8, height: 0 }}
+          animate={{ opacity: 1, y: 0, height: "auto" }}
+          exit={{ opacity: 0, y: -8, height: 0 }}
+          className={`mb-4 flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm ${
+            type === "success"
+              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+              : "border-red-500/30 bg-red-500/10 text-red-300"
+          }`}
+        >
+          {type === "success" ? (
+            <CheckCircle2 size={18} className="mt-0.5 shrink-0" />
+          ) : (
+            <AlertCircle size={18} className="mt-0.5 shrink-0" />
+          )}
+          <span>{message}</span>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
   );
 }

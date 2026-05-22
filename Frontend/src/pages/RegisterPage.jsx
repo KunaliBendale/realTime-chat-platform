@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Lock, Mail, Phone, User } from "lucide-react";
 import { AuthAlert } from "../components/auth/AuthAlert";
 import { AuthShell } from "../components/auth/AuthShell";
 import { FormField } from "../components/auth/FormField";
 import { GoogleAuthButton } from "../components/auth/GoogleAuthButton";
+import { Button } from "../components/ui/Button";
 import { useAuthStore } from "../store/authStore";
 
 const initialForm = {
@@ -98,7 +100,7 @@ export function RegisterPage() {
   return (
     <AuthShell
       title="Create account"
-      subtitle="Register with the details required by the backend auth API."
+      subtitle="Create your account and start messaging in seconds."
     >
       <form className="space-y-5" onSubmit={handleSubmit} noValidate>
         <AuthAlert message={error} />
@@ -109,6 +111,7 @@ export function RegisterPage() {
           name="name"
           type="text"
           autoComplete="name"
+          icon={User}
           value={form.name}
           onChange={updateField}
           placeholder="Kunal Sharma"
@@ -122,6 +125,7 @@ export function RegisterPage() {
           name="email"
           type="email"
           autoComplete="email"
+          icon={Mail}
           value={form.email}
           onChange={updateField}
           placeholder="you@example.com"
@@ -136,6 +140,7 @@ export function RegisterPage() {
           type="tel"
           inputMode="numeric"
           autoComplete="tel"
+          icon={Phone}
           value={form.mobile}
           onChange={updateField}
           placeholder="9876543210"
@@ -150,6 +155,7 @@ export function RegisterPage() {
             name="password"
             type="password"
             autoComplete="new-password"
+            icon={Lock}
             value={form.password}
             onChange={updateField}
             placeholder="Minimum 8 characters"
@@ -163,6 +169,7 @@ export function RegisterPage() {
             name="confirmPassword"
             type="password"
             autoComplete="new-password"
+            icon={Lock}
             value={form.confirmPassword}
             onChange={updateField}
             placeholder="Repeat password"
@@ -171,13 +178,9 @@ export function RegisterPage() {
           />
         </div>
 
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="w-full bg-[#2563eb] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#1d4ed8] disabled:bg-[#93aeea]"
-        >
-          {isSubmitting ? "Creating account..." : "Create account"}
-        </button>
+        <Button type="submit" disabled={isSubmitting} className="w-full" size="lg">
+          {isSubmitting ? "Creating account…" : "Create account"}
+        </Button>
       </form>
 
       <div className="my-5 flex items-center gap-3">

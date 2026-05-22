@@ -244,13 +244,15 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
-  searchUsers: async (search) => {
+  searchUsers: async (search, options = {}) => {
+    const { loadDefault = false } = options;
+
     if (!tokenStorage.getToken()) {
       set({ userSearchResults: [] });
       return { success: false };
     }
 
-    if (!search?.trim()) {
+    if (!search?.trim() && !loadDefault) {
       set({ userSearchResults: [], isUserSearchLoading: false });
       return { success: true, users: [] };
     }
@@ -258,7 +260,7 @@ export const useChatStore = create((set, get) => ({
     set({ isUserSearchLoading: true, error: null });
 
     try {
-      const users = await chatService.searchUsers(search);
+      const users = await chatService.searchUsers(search?.trim() || "");
 
       set({
         userSearchResults: users,

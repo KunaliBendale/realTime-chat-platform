@@ -1,15 +1,26 @@
+import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
 import { ChatActions } from "../components/chat/ChatActions";
 import { ChatPanel } from "../components/chat/ChatPanel";
+import { EmptyChatState } from "../components/chat/EmptyChatState";
+import { MediaViewerModal } from "../components/chat/MediaViewerModal";
+import { PostLoginLoader } from "../components/chat/PostLoginLoader";
+import { ProfileModal } from "../components/chat/ProfileModal";
 import { RecentChats } from "../components/chat/RecentChats";
+import { SettingsModal } from "../components/chat/SettingsModal";
 import { dummyChats } from "../data/dummyChats";
+import { useIsMobile } from "../hooks/useMediaQuery";
 import { getSocketRecipientId } from "../lib/chatMappers";
 import { socketService } from "../services/socketService";
 import { useAuthStore } from "../store/authStore";
 import { useChatStore } from "../store/chatStore";
 
 export function DashboardPage() {
+  const isMobile = useIsMobile();
   const token = useAuthStore((state) => state.token);
+  const user = useAuthStore((state) => state.user);
+  const currentUserId = user?._id || user?.id;
+
   const chats = useChatStore((state) => state.chats);
   const selectedChatId = useChatStore((state) => state.selectedChatId);
   const contacts = useChatStore((state) => state.contacts);
@@ -21,9 +32,11 @@ export function DashboardPage() {
   const actionLoading = useChatStore((state) => state.actionLoading);
   const error = useChatStore((state) => state.error);
   const socketStatus = useChatStore((state) => state.socketStatus);
+  const onlineUserIds = useChatStore((state) => state.onlineUserIds);
   const typingByChatId = useChatStore((state) => state.typingByChatId);
   const userSearchResults = useChatStore((state) => state.userSearchResults);
   const isUserSearchLoading = useChatStore((state) => state.isUserSearchLoading);
+
   const fetchChats = useChatStore((state) => state.fetchChats);
   const fetchContacts = useChatStore((state) => state.fetchContacts);
   const openConversation = useChatStore((state) => state.openConversation);
@@ -31,13 +44,15 @@ export function DashboardPage() {
   const addContact = useChatStore((state) => state.addContact);
   const searchUsers = useChatStore((state) => state.searchUsers);
   const createGroup = useChatStore((state) => state.createGroup);
-  const prepareOptimisticMessage = useChatStore(
-    (state) => state.prepareOptimisticMessage,
-  );
+  const prepareOptimisticMessage = useChatStore((state) => state.prepareOptimisticMessage);
   const sendMessageWithRest = useChatStore((state) => state.sendMessageWithRest);
-  const user = useAuthStore((state) => state.user);
-  const currentUserId = user?._id || user?.id;
+
   const [activeChatAction, setActiveChatAction] = useState(null);
+  const [showProfile, setShowProfile] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [mediaPreview, setMediaPreview] = useState(null);
+  const [mobileShowChat, setMobileShowChat] = useState(false);
+  const [showBootstrap, setShowBootstrap] = useState(true);
 
   useEffect(() => {
     fetchChats();
@@ -45,32 +60,48 @@ export function DashboardPage() {
   }, [fetchChats, fetchContacts, token]);
 
   useEffect(() => {
-    if (!selectedChatId && dummyChats[0]?.id) {
+    if (!isChatsLoading && !isContactsLoading) {
+      const timer = window.setTimeout(() => setShowBootstrap(false), 600);
+      return () => window.clearTimeout(timer);
+    }
+
+    return undefined;
+  }, [isChatsLoading, isContactsLoading]);
+
+  useEffect(() => {
+    if (!selectedChatId && dummyChats[0]?.id && !chats.length) {
       openConversation(dummyChats[0].id);
     }
-  }, [openConversation, selectedChatId]);
+  }, [chats.length, openConversation, selectedChatId]);
 
   const visibleChats = chats.length ? chats : dummyChats;
   const selectedChat = useMemo(
     () =>
-      visibleChats.find((chat) => chat.id === selectedChatId) ||
-      visibleChats[0] ||
-      null,
+      visibleChats.find((chat) => chat.id === selectedChatId) || visibleChats[0] || null,
     [selectedChatId, visibleChats],
   );
-  const messages = useMemo(
-    () => {
-      if (!selectedChat) return [];
 
-      const cachedMessages = messagesByChatId[selectedChat.id];
+  const messages = useMemo(() => {
+    if (!selectedChat) return [];
 
-      if (!chats.length && cachedMessages?.length) {
-        return [...(selectedChat.messages || []), ...cachedMessages];
-      }
+    const cachedMessages = messagesByChatId[selectedChat.id];
 
-      return cachedMessages || selectedChat.messages || [];
-    },
-    [chats.length, messagesByChatId, selectedChat],
+    if (!chats.length && cachedMessages?.length) {
+      return [...(selectedChat.messages || []), ...cachedMessages];
+    }
+
+    return cachedMessages || selectedChat.messages || [];
+  }, [chats.length, messagesByChatId, selectedChat]);
+
+  const recipientId = selectedChat
+    ? getSocketRecipientId(selectedChat, currentUserId)
+    : null;
+  const isChatOnline = recipientId ? onlineUserIds.includes(recipientId.toString()) : false;
+
+  const isTyping = Boolean(
+    selectedChat &&
+      (typingByChatId[selectedChat.id] ||
+        typingByChatId[recipientId]),
   );
 
   useEffect(() => {
@@ -78,15 +109,18 @@ export function DashboardPage() {
 
     socketService.joinChat({
       chatId: selectedChat.id,
-      receiverId: getSocketRecipientId(selectedChat, currentUserId),
+      receiverId: recipientId,
     });
-  }, [chats.length, currentUserId, selectedChat, token]);
+  }, [chats.length, recipientId, selectedChat, token]);
 
-  const isTyping = Boolean(
-    selectedChat &&
-      (typingByChatId[selectedChat.id] ||
-        typingByChatId[getSocketRecipientId(selectedChat, currentUserId)]),
-  );
+  const handleSelectChat = (chatId) => {
+    openConversation(chatId);
+    if (isMobile) setMobileShowChat(true);
+  };
+
+  const handleBackToList = () => {
+    setMobileShowChat(false);
+  };
 
   const handleSendMessage = ({ chat, content, image, clientTempId }) => {
     const sent = socketService.sendMessage({
@@ -124,43 +158,86 @@ export function DashboardPage() {
     });
   };
 
-  return (
-    <main className="h-full overflow-hidden bg-[#edf1f7] text-[#172033]">
-      <div className="mx-auto flex h-full max-w-7xl flex-col border-x border-[#d9dee8] bg-white lg:flex-row">
-        <div className="h-[360px] shrink-0 lg:h-full lg:w-[390px]">
-          <RecentChats
-            chats={visibleChats}
-            selectedChat={selectedChat}
-            selectedChatId={selectedChat?.id}
-            isLoading={isChatsLoading}
-            contacts={contacts}
-            isContactsLoading={isContactsLoading}
-            onSelectChat={openConversation}
-            onStartContactChat={accessChat}
-            onOpenAction={setActiveChatAction}
-          />
-        </div>
+  const showSidebar = !isMobile || !mobileShowChat;
+  const showChatPanel = !isMobile || mobileShowChat;
 
-        <div className="flex min-h-0 flex-1 flex-col">
+  return (
+    <>
+      <PostLoginLoader isVisible={showBootstrap && Boolean(token)} userName={user?.name} />
+
+      <main className="flex h-full min-h-0 overflow-hidden">
+        <AnimatePresence mode="wait">
+          {showSidebar ? (
+            <motion.div
+              key="sidebar"
+              className="h-full w-full shrink-0 lg:w-[380px] xl:w-[400px]"
+              initial={isMobile ? { x: -24, opacity: 0 } : false}
+              animate={{ x: 0, opacity: 1 }}
+              exit={isMobile ? { x: -24, opacity: 0 } : undefined}
+              transition={{ duration: 0.25 }}
+            >
+              <RecentChats
+                chats={visibleChats}
+                selectedChatId={selectedChat?.id}
+                contacts={contacts}
+                onlineUserIds={onlineUserIds}
+                isLoading={isChatsLoading}
+                isContactsLoading={isContactsLoading}
+                onSelectChat={handleSelectChat}
+                onStartContactChat={accessChat}
+                onOpenAction={setActiveChatAction}
+                onOpenSettings={() => setShowSettings(true)}
+              />
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+
+        <section className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           {(error || isUsingPreviewData) && (
-            <div className="border-b border-[#fde68a] bg-[#fffbeb] px-4 py-2 text-xs text-[#92400e]">
+            <motion.div
+              className="shrink-0 border-b border-amber-500/20 bg-amber-500/10 px-4 py-2 text-center text-xs text-amber-200"
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
               {error || "Preview data is shown until backend chats are loaded."}
-            </div>
+            </motion.div>
           )}
 
-          <ChatPanel
-            chat={selectedChat}
-            messages={messages}
-            isLoading={isMessagesLoading}
-            socketStatus={socketStatus}
-            isTyping={isTyping}
-            onPrepareOptimisticMessage={prepareOptimisticMessage}
-            onSendMessage={handleSendMessage}
-            onTyping={handleTyping}
-            onStopTyping={handleStopTyping}
-          />
-        </div>
-      </div>
+          <AnimatePresence mode="wait">
+            {showChatPanel ? (
+              <motion.div
+                key={selectedChat?.id || "empty"}
+                className="flex min-h-0 flex-1 flex-col"
+                initial={isMobile ? { x: 24, opacity: 0 } : { opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={isMobile ? { x: 24, opacity: 0 } : { opacity: 0 }}
+                transition={{ duration: 0.25 }}
+              >
+                {selectedChat ? (
+                  <ChatPanel
+                    chat={selectedChat}
+                    messages={messages}
+                    isLoading={isMessagesLoading}
+                    isTyping={isTyping}
+                    isOnline={isChatOnline}
+                    showBack={isMobile}
+                    onBack={handleBackToList}
+                    onOpenProfile={() => setShowProfile(true)}
+                    onOpenSettings={() => setShowSettings(true)}
+                    onImageClick={setMediaPreview}
+                    onPrepareOptimisticMessage={prepareOptimisticMessage}
+                    onSendMessage={handleSendMessage}
+                    onTyping={handleTyping}
+                    onStopTyping={handleStopTyping}
+                  />
+                ) : (
+                  <EmptyChatState onStartChat={() => setActiveChatAction("directChat")} />
+                )}
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+        </section>
+      </main>
 
       <ChatActions
         activeAction={activeChatAction}
@@ -175,6 +252,21 @@ export function DashboardPage() {
         isUserSearchLoading={isUserSearchLoading}
         onCreateGroup={createGroup}
       />
-    </main>
+
+      <ProfileModal
+        isOpen={showProfile}
+        onClose={() => setShowProfile(false)}
+        chat={selectedChat}
+        isOnline={isChatOnline}
+      />
+
+      <SettingsModal
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+        socketStatus={socketStatus}
+      />
+
+      <MediaViewerModal media={mediaPreview} onClose={() => setMediaPreview(null)} />
+    </>
   );
 }

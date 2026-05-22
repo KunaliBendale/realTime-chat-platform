@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Mail, Lock } from "lucide-react";
 import { AuthAlert } from "../components/auth/AuthAlert";
 import { AuthShell } from "../components/auth/AuthShell";
 import { FormField } from "../components/auth/FormField";
 import { GoogleAuthButton } from "../components/auth/GoogleAuthButton";
+import { Button } from "../components/ui/Button";
 import { useAuthStore } from "../store/authStore";
 
 const initialForm = {
@@ -84,7 +86,7 @@ export function LoginPage() {
   return (
     <AuthShell
       title="Welcome back"
-      subtitle="Sign in with your email and password to continue."
+      subtitle="Sign in to continue to your conversations."
     >
       <form className="space-y-5" onSubmit={handleSubmit} noValidate>
         <AuthAlert type="success" message={alertMessage} />
@@ -96,6 +98,7 @@ export function LoginPage() {
           name="email"
           type="email"
           autoComplete="email"
+          icon={Mail}
           value={form.email}
           onChange={updateField}
           placeholder="you@example.com"
@@ -109,6 +112,7 @@ export function LoginPage() {
           name="password"
           type="password"
           autoComplete="current-password"
+          icon={Lock}
           value={form.password}
           onChange={updateField}
           placeholder="Enter your password"
@@ -116,13 +120,9 @@ export function LoginPage() {
           disabled={isSubmitting}
         />
 
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="w-full bg-[#2563eb] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#1d4ed8] disabled:bg-[#93aeea]"
-        >
-          {isSubmitting ? "Signing in..." : "Sign in"}
-        </button>
+        <Button type="submit" disabled={isSubmitting} className="w-full" size="lg">
+          {isSubmitting ? "Signing in…" : "Sign in"}
+        </Button>
       </form>
 
       <div className="my-5 flex items-center gap-3">
@@ -137,7 +137,7 @@ export function LoginPage() {
 
       <p className="mt-6 text-center text-sm text-[#5d6b82]">
         New here?{" "}
-        <Link className="font-semibold text-[#2563eb] hover:text-[#1d4ed8]" to="/register">
+        <Link className="font-semibold text-indigo-400 hover:text-indigo-300" to="/register">
           Create an account
         </Link>
       </p>

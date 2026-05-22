@@ -1,4 +1,7 @@
+import { AnimatePresence, motion } from "framer-motion";
+import { ImagePlus, Send, Smile, X } from "lucide-react";
 import { useState } from "react";
+import { Button } from "../ui/Button";
 
 export function MessageInput({
   chat,
@@ -9,11 +12,13 @@ export function MessageInput({
 }) {
   const [message, setMessage] = useState("");
   const [image, setImage] = useState("");
+  const [showImageField, setShowImageField] = useState(false);
+
+  const canSend = message.trim() || image.trim();
 
   const handleSubmit = (event) => {
     event.preventDefault();
-
-    if (!message.trim() && !image.trim()) return;
+    if (!canSend) return;
 
     const optimisticMessage = onPrepareOptimisticMessage({
       chatId: chat.id,
@@ -30,13 +35,15 @@ export function MessageInput({
 
     setMessage("");
     setImage("");
+    setShowImageField(false);
     onStopTyping(chat);
   };
 
   const handleMessageChange = (event) => {
-    setMessage(event.target.value);
+    const value = event.target.value;
+    setMessage(value);
 
-    if (event.target.value.trim()) {
+    if (value.trim()) {
       onTyping(chat);
     } else {
       onStopTyping(chat);
@@ -46,38 +53,81 @@ export function MessageInput({
   return (
     <form
       onSubmit={handleSubmit}
-      className="border-t border-[#d9dee8] bg-white px-4 py-3 sm:px-5"
+      className="shrink-0 border-t border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-3 py-3 backdrop-blur-xl sm:px-4"
     >
-      <div className="mx-auto flex max-w-3xl items-end gap-2">
-        <label className="hidden min-w-0 flex-1 sm:block">
-          <span className="sr-only">Image URL</span>
-          <input
-            value={image}
-            onChange={(event) => setImage(event.target.value)}
-            placeholder="Image URL"
-            className="h-11 w-full border border-[#cfd6e3] bg-[#f7f8fb] px-3 text-sm text-[#172033] outline-none placeholder:text-[#8b97aa] focus:border-[#2563eb]"
-          />
-        </label>
+      <AnimatePresence>
+        {showImageField ? (
+          <motion.div
+            className="mx-auto mb-3 flex max-w-3xl items-center gap-2 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-input)] p-2"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+          >
+            <ImagePlus size={16} className="shrink-0 text-[var(--text-muted)]" />
+            <input
+              value={image}
+              onChange={(event) => setImage(event.target.value)}
+              placeholder="Paste image URL"
+              className="min-w-0 flex-1 bg-transparent text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                setShowImageField(false);
+                setImage("");
+              }}
+              className="grid size-8 place-items-center rounded-xl text-[var(--text-muted)] hover:bg-white/10"
+              aria-label="Remove attachment"
+            >
+              <X size={16} />
+            </button>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
-        <label className="min-w-0 flex-[2]">
+      <div className="mx-auto flex max-w-3xl items-end gap-2">
+        <div className="flex shrink-0 gap-1 pb-0.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => setShowImageField((current) => !current)}
+            aria-label="Attach image"
+          >
+            <ImagePlus size={20} />
+          </Button>
+          <Button type="button" variant="ghost" size="icon" aria-label="Emoji">
+            <Smile size={20} />
+          </Button>
+        </div>
+
+        <label className="min-w-0 flex-1">
           <span className="sr-only">Message</span>
           <textarea
             rows={1}
             value={message}
             onChange={handleMessageChange}
             onBlur={() => onStopTyping(chat)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                handleSubmit(event);
+              }
+            }}
             placeholder="Type a message"
-            className="max-h-28 min-h-11 w-full resize-none border border-[#cfd6e3] bg-[#f7f8fb] px-3 py-2.5 text-sm text-[#172033] outline-none placeholder:text-[#8b97aa] focus:border-[#2563eb]"
+            className="max-h-32 min-h-11 w-full resize-none rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-input)] px-4 py-3 text-sm text-[var(--text-primary)] shadow-sm outline-none transition placeholder:text-[var(--text-muted)] focus:border-indigo-400/50 focus:ring-4 focus:ring-indigo-500/10"
           />
         </label>
 
-        <button
+        <Button
           type="submit"
-          disabled={!message.trim() && !image.trim()}
-          className="h-11 shrink-0 bg-[#2563eb] px-5 text-sm font-semibold text-white transition hover:bg-[#1d4ed8] disabled:bg-[#93aeea]"
+          size="icon"
+          disabled={!canSend}
+          className="mb-0.5 shrink-0 rounded-2xl"
+          aria-label="Send message"
         >
-          Send
-        </button>
+          <Send size={18} />
+        </Button>
       </div>
     </form>
   );

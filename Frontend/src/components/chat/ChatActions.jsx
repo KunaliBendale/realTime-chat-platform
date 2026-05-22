@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AnimatePresence, motion as Motion } from "framer-motion";
 import {
   Check,
   Loader2,
@@ -11,6 +10,11 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { Avatar } from "../ui/Avatar";
+import { Button } from "../ui/Button";
+import { Input } from "../ui/Input";
+import { Modal } from "../ui/Modal";
+import { ChatListSkeleton } from "../ui/Skeleton";
 
 const initialForms = {
   userSearch: "",
@@ -21,36 +25,32 @@ const initialForms = {
 
 const actionConfig = {
   addContact: {
-    title: "Add User",
-    description: "Save a contact by name and mobile number.",
+    title: "Add contact",
+    description: "Save someone by name and mobile number.",
     icon: UserPlus,
+    size: "md",
   },
   searchUser: {
-    title: "Search Contacts",
-    description: "Search saved contacts or find someone by mobile number.",
+    title: "Find people",
+    description: "Search saved contacts or discover users on the platform.",
     icon: UserRoundSearch,
+    size: "lg",
   },
   createGroup: {
-    title: "Create Group",
-    description: "Select contacts and create a group conversation.",
+    title: "Create group",
+    description: "Name your group and select members to add.",
     icon: Users,
+    size: "lg",
   },
   directChat: {
-    title: "New Chat",
-    description: "Choose a contact to open a one-to-one conversation.",
+    title: "New chat",
+    description: "Pick someone to start a direct conversation.",
     icon: MessageCircle,
+    size: "lg",
   },
 };
 
 const getUserId = (user) => user?._id || user?.id || user;
-
-const getInitials = (name = "User") =>
-  name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
 
 const normalizeContact = (user, source = "directory") => {
   const linkedUser = user?.user || user?.contactUser;
@@ -78,8 +78,9 @@ const mergeContacts = (...contactGroups) => {
   const contactsById = new Map();
 
   contactGroups.flat().forEach((contact) => {
-    if (!contact?.id) return;
-    const key = contact.chatUserId || contact.mobile || contact.id;
+    if (!contact?.chatUserId) return;
+
+    const key = contact.chatUserId;
     const existingContact = contactsById.get(key);
 
     contactsById.set(key, {
@@ -110,36 +111,40 @@ export function ChatActions({
   const [forms, setForms] = useState(initialForms);
   const [selectedUserIds, setSelectedUserIds] = useState([]);
   const [lastSavedContact, setLastSavedContact] = useState(null);
+
   const config = useMemo(() => actionConfig[activeAction], [activeAction]);
   const isBusy = Boolean(actionLoading);
+  const isGroupMode = activeAction === "createGroup";
   const hasSearchTerm = Boolean(forms.userSearch.trim());
 
   const savedContactList = useMemo(
     () =>
       (savedContacts || [])
         .map((contact) => normalizeContact(contact, "saved"))
-        .filter(Boolean),
+        .filter((contact) => contact?.chatUserId),
     [savedContacts],
   );
+
   const directoryContacts = useMemo(
     () =>
-      hasSearchTerm
-        ? (userSearchResults || [])
-            .map((user) => normalizeContact(user, "directory"))
-            .filter(Boolean)
-        : [],
-    [hasSearchTerm, userSearchResults],
+      (userSearchResults || [])
+        .map((user) => normalizeContact(user, "directory"))
+        .filter(Boolean),
+    [userSearchResults],
   );
+
   const contacts = useMemo(
     () => mergeContacts(savedContactList, directoryContacts),
     [directoryContacts, savedContactList],
   );
-  const selectedContacts = useMemo(
-    () => contacts.filter((contact) => selectedUserIds.includes(contact.chatUserId)),
-    [contacts, selectedUserIds],
-  );
-  const searchPlaceholder =
-    activeAction === "createGroup" ? "Search contacts to add" : "Search contacts";
+
+  const selectedContacts = useMemo(() => {
+    const byId = new Map(contacts.map((contact) => [contact.chatUserId, contact]));
+
+    return selectedUserIds
+      .map((userId) => byId.get(userId))
+      .filter(Boolean);
+  }, [contacts, selectedUserIds]);
 
   const closeModal = useCallback(() => {
     setForms(initialForms);
@@ -150,60 +155,54 @@ export function ChatActions({
 
   useEffect(() => {
     const handleKeyDown = (event) => {
-      if (event.key === "Escape") {
-        closeModal();
-      }
+      if (event.key === "Escape") closeModal();
     };
 
     if (activeAction) {
       document.addEventListener("keydown", handleKeyDown);
     }
 
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-    };
+    return () => document.removeEventListener("keydown", handleKeyDown);
   }, [activeAction, closeModal]);
 
   useEffect(() => {
-    if (!activeAction || !hasToken) return;
+    if (!activeAction || !hasToken) return undefined;
+
+    if (isGroupMode && !hasSearchTerm) {
+      onSearchUsers("", { loadDefault: true });
+      return undefined;
+    }
 
     const searchTimer = window.setTimeout(() => {
       if (forms.userSearch.trim()) {
         onSearchUsers(forms.userSearch.trim());
-      } else {
+      } else if (!isGroupMode) {
         onSearchUsers("");
+      } else {
+        onSearchUsers("", { loadDefault: true });
       }
-    }, 250);
+    }, 280);
 
-    return () => {
-      window.clearTimeout(searchTimer);
-    };
-  }, [activeAction, forms.userSearch, hasToken, onSearchUsers]);
+    return () => window.clearTimeout(searchTimer);
+  }, [activeAction, forms.userSearch, hasSearchTerm, hasToken, isGroupMode, onSearchUsers]);
 
   const updateField = (event) => {
     const { name, value } = event.target;
-
-    setForms((currentForms) => ({
-      ...currentForms,
-      [name]: value,
-    }));
+    setForms((current) => ({ ...current, [name]: value }));
   };
 
   const openDirectChat = async (contactId) => {
     const result = await onAccessChat(contactId);
-
-    if (result?.success) {
-      closeModal();
-    }
+    if (result?.success) closeModal();
   };
 
   const toggleContact = (contact) => {
-    if (!contact.chatUserId) return;
+    if (!contact?.chatUserId) return;
 
-    setSelectedUserIds((currentIds) =>
-      currentIds.includes(contact.chatUserId)
-        ? currentIds.filter((id) => id !== contact.chatUserId)
-        : [...currentIds, contact.chatUserId],
+    setSelectedUserIds((current) =>
+      current.includes(contact.chatUserId)
+        ? current.filter((id) => id !== contact.chatUserId)
+        : [...current, contact.chatUserId],
     );
   };
 
@@ -216,8 +215,8 @@ export function ChatActions({
 
     if (result?.success) {
       setLastSavedContact(normalizeContact(result.contact, "saved"));
-      setForms((currentForms) => ({
-        ...currentForms,
+      setForms((current) => ({
+        ...current,
         contactName: "",
         contactMobile: "",
       }));
@@ -231,80 +230,115 @@ export function ChatActions({
       users: selectedUserIds,
     });
 
-    if (result?.success) {
-      closeModal();
-    }
+    if (result?.success) closeModal();
   };
+
+  const renderCreateGroupBody = () => (
+    <form id="create-group-form" className="flex flex-col gap-4" onSubmit={handleCreateGroup}>
+      <Input
+        id="groupName"
+        label="Group name"
+        name="groupName"
+        value={forms.groupName}
+        onChange={updateField}
+        placeholder="e.g. Design team, Family, Project Alpha"
+        disabled={isBusy}
+      />
+
+      <ContactSearchField
+        value={forms.userSearch}
+        onChange={updateField}
+        isLoading={isUserSearchLoading}
+        placeholder="Filter members by name, email, or mobile"
+        hint={`${contacts.length} available · ${selectedUserIds.length} selected`}
+      />
+
+      {selectedContacts.length > 0 ? (
+        <SelectedMembersRow contacts={selectedContacts} onRemove={toggleContact} />
+      ) : null}
+
+      <ContactList
+        contacts={contacts}
+        emptyText={
+          hasSearchTerm
+            ? "No users match your search. Try a different name or email."
+            : "No registered users available yet. Add contacts or try searching."
+        }
+        isLoading={isUserSearchLoading && contacts.length === 0}
+        mode="multi"
+        selectedUserIds={selectedUserIds}
+        onContactClick={toggleContact}
+      />
+    </form>
+  );
 
   const renderBody = () => {
     if (activeAction === "addContact") {
       return (
         <form className="grid gap-4" onSubmit={handleAddContact}>
-          <label className="grid gap-2 text-sm font-semibold text-[#172033]">
-            Name
-            <input
-              name="contactName"
-              value={forms.contactName}
-              onChange={updateField}
-              placeholder="Contact name"
-              className="rounded-lg border border-[#cfd6e3] bg-white/90 px-3 py-3 text-sm font-normal text-[#172033] outline-none transition placeholder:text-[#8b97aa] focus:border-[#128c7e] focus:ring-4 focus:ring-[#128c7e]/10"
-            />
-          </label>
+          <Input
+            id="contactName"
+            label="Name"
+            name="contactName"
+            value={forms.contactName}
+            onChange={updateField}
+            placeholder="Contact name"
+            disabled={isBusy}
+          />
 
-          <label className="grid gap-2 text-sm font-semibold text-[#172033]">
-            Mobile number
-            <div className="relative">
-              <Phone
-                size={17}
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#66758c]"
-              />
-              <input
-                name="contactMobile"
-                value={forms.contactMobile}
-                onChange={updateField}
-                inputMode="tel"
-                placeholder="10 digit mobile number"
-                className="w-full rounded-lg border border-[#cfd6e3] bg-white/90 py-3 pl-10 pr-3 text-sm font-normal text-[#172033] outline-none transition placeholder:text-[#8b97aa] focus:border-[#128c7e] focus:ring-4 focus:ring-[#128c7e]/10"
-              />
-            </div>
-          </label>
+          <Input
+            id="contactMobile"
+            label="Mobile number"
+            name="contactMobile"
+            icon={Phone}
+            value={forms.contactMobile}
+            onChange={updateField}
+            inputMode="tel"
+            placeholder="10 digit mobile number"
+            disabled={isBusy}
+          />
 
-          <PrimaryButton
+          <Button
+            type="submit"
+            className="w-full"
             disabled={
               isBusy ||
               !forms.contactName.trim() ||
               forms.contactMobile.replace(/\D/g, "").length < 10
             }
-            isLoading={actionLoading === "addContact"}
           >
-            Add Contact
-          </PrimaryButton>
+            {actionLoading === "addContact" ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : null}
+            Add contact
+          </Button>
 
           {lastSavedContact ? (
-            <div className="rounded-lg border border-[#c8eadf] bg-[#effaf6] p-3">
+            <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4">
               <div className="flex items-center gap-3">
-                <ContactAvatar contact={lastSavedContact} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold text-[#172033]">
+                <Avatar name={lastSavedContact.name} src={lastSavedContact.profilePic} size="md" />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-[var(--text-primary)]">
                     {lastSavedContact.name}
-                  </span>
-                  <span className="block truncate text-xs text-[#66758c]">
+                  </p>
+                  <p className="truncate text-xs text-[var(--text-secondary)]">
                     {lastSavedContact.mobile}
-                  </span>
-                </span>
+                  </p>
+                </div>
               </div>
               {lastSavedContact.chatUserId ? (
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
+                  className="mt-3 w-full"
                   onClick={() => openDirectChat(lastSavedContact.chatUserId)}
-                  className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#128c7e] px-3 text-sm font-semibold text-white transition hover:bg-[#0f766d]"
                 >
                   <MessageCircle size={17} />
-                  Start Chat
-                </button>
+                  Start chat
+                </Button>
               ) : (
-                <p className="mt-3 text-xs leading-5 text-[#66758c]">
-                  Contact saved. Chat will become available when this mobile number joins.
+                <p className="mt-3 text-xs text-[var(--text-secondary)]">
+                  Contact saved. Chat unlocks when they register with this number.
                 </p>
               )}
             </div>
@@ -313,76 +347,26 @@ export function ChatActions({
       );
     }
 
-    if (activeAction === "createGroup") {
-      return (
-        <form className="grid min-h-0 gap-4" onSubmit={handleCreateGroup}>
-          <label className="grid gap-2 text-sm font-semibold text-[#172033]">
-            Group name
-            <input
-              name="groupName"
-              value={forms.groupName}
-              onChange={updateField}
-              placeholder="Project team"
-              className="rounded-lg border border-[#cfd6e3] bg-white/90 px-3 py-3 text-sm font-normal text-[#172033] outline-none transition placeholder:text-[#8b97aa] focus:border-[#128c7e] focus:ring-4 focus:ring-[#128c7e]/10"
-            />
-          </label>
-
-          <ContactSearchField
-            value={forms.userSearch}
-            onChange={updateField}
-            isLoading={isUserSearchLoading}
-            placeholder={searchPlaceholder}
-          />
-
-          {selectedContacts.length ? (
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {selectedContacts.map((contact) => (
-                <button
-                  key={contact.id}
-                  type="button"
-                  onClick={() => toggleContact(contact)}
-                  className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[#e8f5f2] py-1 pl-1 pr-2 text-xs font-semibold text-[#128c7e]"
-                >
-                  <ContactAvatar contact={contact} size="sm" />
-                  {contact.name}
-                  <X size={13} />
-                </button>
-              ))}
-            </div>
-          ) : null}
-
-          <ContactList
-            contacts={contacts}
-            emptyText="Add saved contacts first, or search by mobile number."
-            isLoading={isUserSearchLoading && !contacts.length}
-            mode="multi"
-            selectedUserIds={selectedUserIds}
-            onContactClick={toggleContact}
-          />
-
-          <PrimaryButton
-            disabled={isBusy || !forms.groupName.trim() || selectedUserIds.length === 0}
-            isLoading={actionLoading === "createGroup"}
-          >
-            Create Group
-            {selectedUserIds.length ? ` (${selectedUserIds.length})` : ""}
-          </PrimaryButton>
-        </form>
-      );
+    if (isGroupMode) {
+      return renderCreateGroupBody();
     }
 
     return (
-      <div className="grid min-h-0 gap-4">
+      <div className="grid gap-4">
         <ContactSearchField
           value={forms.userSearch}
           onChange={updateField}
           isLoading={isUserSearchLoading}
-          placeholder={searchPlaceholder}
+          placeholder="Search by name, email, or mobile"
         />
 
         <ContactList
           contacts={contacts}
-          emptyText="Search for a contact to start a conversation."
+          emptyText={
+            hasSearchTerm
+              ? "No users found. Try another search term."
+              : "Search to find people on the platform."
+          }
           isLoading={isUserSearchLoading && !contacts.length}
           mode="single"
           selectedUserIds={[]}
@@ -393,94 +377,100 @@ export function ChatActions({
     );
   };
 
-  const Icon = config?.icon;
+  const renderFooter = () => {
+    if (!isGroupMode) return null;
+
+    return (
+      <Button
+        type="submit"
+        form="create-group-form"
+        className="w-full"
+        size="lg"
+        disabled={isBusy || !forms.groupName.trim() || selectedUserIds.length === 0}
+      >
+        {actionLoading === "createGroup" ? (
+          <Loader2 size={18} className="animate-spin" />
+        ) : (
+          <Users size={18} />
+        )}
+        Create group
+        {selectedUserIds.length > 0 ? ` · ${selectedUserIds.length} member${selectedUserIds.length > 1 ? "s" : ""}` : ""}
+      </Button>
+    );
+  };
 
   return (
-    <AnimatePresence>
-      {activeAction && config ? (
-        <Motion.div
-          className="fixed inset-0 z-50 flex items-end justify-center overflow-hidden bg-[#0f172a]/45 p-0 backdrop-blur-md sm:items-center sm:p-6"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onMouseDown={closeModal}
-        >
-          <Motion.section
-            className="flex h-dvh max-h-dvh w-full flex-col overflow-hidden bg-white p-5 shadow-2xl shadow-[#0f172a]/20 sm:h-auto sm:max-h-[88vh] sm:max-w-xl sm:rounded-lg sm:border sm:border-white/60 sm:bg-white/80 sm:p-6 sm:backdrop-blur-xl"
-            initial={{ opacity: 0, y: 56, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 56, scale: 0.98 }}
-            transition={{ duration: 0.22, ease: "easeOut" }}
-            onMouseDown={(event) => event.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="chat-action-title"
-          >
-            <div className="flex items-start justify-between gap-4 border-b border-[#e5e9f0] pb-4">
-              <div className="flex min-w-0 items-start gap-3">
-                <span className="grid size-11 shrink-0 place-items-center rounded-lg bg-[#e8f5f2] text-[#128c7e]">
-                  {Icon ? <Icon size={20} /> : null}
-                </span>
-                <span className="min-w-0">
-                  <h2
-                    id="chat-action-title"
-                    className="text-lg font-semibold text-[#172033]"
-                  >
-                    {config.title}
-                  </h2>
-                  <p className="mt-1 text-sm leading-5 text-[#66758c]">
-                    {config.description}
-                  </p>
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={closeModal}
-                className="grid size-10 shrink-0 place-items-center rounded-lg border border-[#d9dee8] bg-white/80 text-[#66758c] transition hover:border-[#128c7e] hover:text-[#128c7e]"
-                aria-label="Close modal"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {!hasToken ? (
-              <div className="mt-4 rounded-lg border border-[#fde68a] bg-[#fffbeb] px-3 py-2 text-xs leading-5 text-[#92400e]">
-                Sign in with a valid JWT to load contacts and create chats.
-              </div>
-            ) : null}
-
-            <div className="min-h-0 flex-1 overflow-y-auto pt-5">{renderBody()}</div>
-          </Motion.section>
-        </Motion.div>
+    <Modal
+      isOpen={Boolean(activeAction && config)}
+      onClose={closeModal}
+      title={config?.title}
+      description={config?.description}
+      icon={config?.icon}
+      size={config?.size || "md"}
+      footer={renderFooter()}
+    >
+      {!hasToken ? (
+        <div className="mb-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          Sign in to load contacts and create conversations.
+        </div>
       ) : null}
-    </AnimatePresence>
+
+      {renderBody()}
+    </Modal>
   );
 }
 
-function ContactSearchField({ value, onChange, isLoading, placeholder }) {
+function ContactSearchField({ value, onChange, isLoading, placeholder, hint }) {
   return (
-    <label className="grid gap-2 text-sm font-semibold text-[#172033]">
-      Search
+    <div>
+      <label className="mb-2 block text-sm font-medium text-[var(--text-primary)]">
+        Search members
+      </label>
       <div className="relative">
         <Search
           size={17}
-          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#66758c]"
+          className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
         />
         <input
           name="userSearch"
           value={value}
           onChange={onChange}
           placeholder={placeholder}
-          className="w-full rounded-lg border border-[#cfd6e3] bg-white/90 py-3 pl-10 pr-10 text-sm font-normal text-[#172033] outline-none transition placeholder:text-[#8b97aa] focus:border-[#128c7e] focus:ring-4 focus:ring-[#128c7e]/10"
+          className="w-full rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-input)] py-3 pl-10 pr-10 text-sm text-[var(--text-primary)] outline-none transition placeholder:text-[var(--text-muted)] focus:border-indigo-400/50 focus:ring-4 focus:ring-indigo-500/10"
         />
         {isLoading ? (
           <Loader2
             size={17}
-            className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-[#66758c]"
+            className="absolute right-3.5 top-1/2 -translate-y-1/2 animate-spin text-indigo-400"
           />
         ) : null}
       </div>
-    </label>
+      {hint ? <p className="mt-1.5 text-xs text-[var(--text-muted)]">{hint}</p> : null}
+    </div>
+  );
+}
+
+function SelectedMembersRow({ contacts, onRemove }) {
+  return (
+    <div className="rounded-2xl border border-indigo-400/25 bg-indigo-500/10 p-3">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-indigo-300">
+        Selected members
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {contacts.map((contact) => (
+          <button
+            key={contact.chatUserId}
+            type="button"
+            onClick={() => onRemove(contact)}
+            className="inline-flex items-center gap-2 rounded-full border border-indigo-400/30 bg-[var(--bg-elevated)] py-1 pl-1 pr-2 text-xs font-semibold text-[var(--text-primary)] transition hover:border-red-400/40 hover:bg-red-500/10"
+          >
+            <Avatar name={contact.name} src={contact.profilePic} size="sm" />
+            <span className="max-w-[120px] truncate">{contact.name}</span>
+            <X size={12} className="text-[var(--text-muted)]" />
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -495,107 +485,77 @@ function ContactList({
 }) {
   if (isLoading) {
     return (
-      <div className="grid min-h-52 place-items-center rounded-lg border border-[#d9dee8] bg-white/75 text-sm text-[#66758c]">
-        Loading contacts...
+      <div className="overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-panel)]">
+        <ChatListSkeleton count={5} />
       </div>
     );
   }
 
   if (!contacts.length) {
     return (
-      <div className="grid min-h-52 place-items-center rounded-lg border border-[#d9dee8] bg-white/75 px-4 text-center text-sm text-[#66758c]">
+      <div className="grid min-h-48 place-items-center rounded-2xl border border-dashed border-[var(--border-subtle)] bg-[var(--bg-panel)] px-6 text-center text-sm text-[var(--text-secondary)]">
         {emptyText}
       </div>
     );
   }
 
   return (
-    <div className="min-h-52 overflow-hidden rounded-lg border border-[#d9dee8] bg-white/80">
-      <div className="max-h-72 overflow-y-auto p-2">
+    <div className="overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-panel)]">
+      <div className="custom-scrollbar max-h-64 overflow-y-auto p-2 sm:max-h-72">
         {contacts.map((contact) => {
           const isSelected = selectedUserIds.includes(contact.chatUserId);
-          const canStartChat = Boolean(contact.chatUserId);
+          const isMulti = mode === "multi";
 
           return (
             <button
-              key={contact.id}
+              key={contact.chatUserId}
               type="button"
               onClick={() => onContactClick(contact)}
-              disabled={!canStartChat || actionLoading === "accessChat"}
-              className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition ${
+              disabled={!isMulti && (actionLoading === "accessChat" || !contact.chatUserId)}
+              className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${
                 isSelected
-                  ? "bg-[#e8f5f2] text-[#128c7e]"
-                  : "text-[#172033] hover:bg-[#f1f5f9]"
-              } disabled:cursor-wait disabled:opacity-70`}
+                  ? "bg-indigo-500/15 ring-1 ring-indigo-400/35"
+                  : "hover:bg-white/5"
+              } disabled:cursor-wait disabled:opacity-60`}
             >
-              <ContactAvatar contact={contact} />
+              <Avatar
+                name={contact.name}
+                src={contact.profilePic}
+                size="md"
+                isOnline={contact.status === "active" || contact.status === "online"}
+              />
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2">
-                  <span className="truncate text-sm font-semibold">{contact.name}</span>
+                  <span className="truncate text-sm font-semibold text-[var(--text-primary)]">
+                    {contact.name}
+                  </span>
                   {contact.source === "saved" ? (
-                    <span className="rounded-full bg-[#edf1f7] px-2 py-0.5 text-[11px] font-semibold text-[#66758c]">
+                    <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                       saved
                     </span>
                   ) : null}
                 </span>
-                <span className="mt-0.5 block truncate text-xs text-[#66758c]">
-                  {contact.mobile || contact.email || "Available on chat"}
+                <span className="mt-0.5 block truncate text-xs text-[var(--text-secondary)]">
+                  {contact.mobile || contact.email || "On platform"}
                 </span>
               </span>
-              {mode === "multi" ? (
+              {isMulti ? (
                 <span
-                  className={`grid size-6 shrink-0 place-items-center rounded-full border ${
+                  className={`grid size-6 shrink-0 place-items-center rounded-full border transition ${
                     isSelected
-                      ? "border-[#128c7e] bg-[#128c7e] text-white"
-                      : "border-[#cfd6e3] text-transparent"
+                      ? "border-indigo-400 bg-indigo-500 text-white"
+                      : "border-[var(--border-strong)] bg-transparent text-transparent"
                   }`}
                 >
-                  <Check size={14} />
+                  <Check size={14} strokeWidth={3} />
                 </span>
               ) : (
-                <MessageCircle size={18} className="shrink-0 text-[#128c7e]" />
+                <MessageCircle size={18} className="shrink-0 text-indigo-400" />
               )}
             </button>
           );
         })}
       </div>
     </div>
-  );
-}
-
-function ContactAvatar({ contact, size = "md" }) {
-  const dimensions = size === "sm" ? "size-6 text-[10px]" : "size-11 text-sm";
-  const isOnline = contact.status === "online" || contact.status === "active";
-
-  return (
-    <span
-      className={`relative grid ${dimensions} shrink-0 place-items-center rounded-full bg-[#172033] font-semibold text-white`}
-    >
-      {contact.profilePic ? (
-        <img
-          src={contact.profilePic}
-          alt=""
-          className="size-full rounded-full object-cover"
-        />
-      ) : (
-        getInitials(contact.name)
-      )}
-      {isOnline && size !== "sm" ? (
-        <span className="absolute bottom-0 right-0 size-3 rounded-full border-2 border-white bg-[#25d366]" />
-      ) : null}
-    </span>
-  );
-}
-
-function PrimaryButton({ children, disabled, isLoading }) {
-  return (
-    <button
-      type="submit"
-      disabled={disabled}
-      className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-[#128c7e] px-4 text-sm font-semibold text-white transition hover:bg-[#0f766d] disabled:bg-[#9aa5b5]"
-    >
-      {isLoading ? <Loader2 size={18} className="animate-spin" /> : null}
-      {children}
-    </button>
   );
 }

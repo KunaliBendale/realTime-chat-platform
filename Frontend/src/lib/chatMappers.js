@@ -7,18 +7,9 @@ const getInitials = (name = "Chat") => {
     .join("");
 };
 
-const formatTime = (value) => {
-  if (!value) return "";
+import { formatMessageTime } from "./formatDate";
 
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) return "";
-
-  return date.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-};
+const formatTime = formatMessageTime;
 
 export const getOtherParticipant = (chat, currentUserId) => {
   return chat?.users?.find((user) => {
@@ -41,6 +32,7 @@ export const mapChatFromApi = (chat, currentUserId) => {
     name: chatName,
     role: isGroup ? `${chat.users?.length || 0} members` : otherParticipant?.email || "Direct chat",
     avatar: getInitials(chatName),
+    profilePic: isGroup ? null : otherParticipant?.profilePic,
     status: isGroup ? `${chat.users?.length || 0} members` : "offline",
     lastMessage: latestMessage?.message || latestMessage?.image || "No messages yet",
     lastMessageAt: formatTime(latestMessage?.createdAt || chat.updatedAt),
@@ -57,15 +49,20 @@ export const mapMessageFromApi = (message, currentUserId) => {
   const senderName = message.sender?.name || "User";
   const content = message.message || message.image || "";
 
+  const createdAt = message.createdAt || new Date().toISOString();
+
   return {
     id: message._id || message.id,
     raw: message,
     sender: senderName,
     content,
     image: message.image,
-    time: formatTime(message.createdAt),
+    time: formatTime(createdAt),
+    createdAt,
     isOwn: senderId?.toString() === currentUserId?.toString(),
     isOptimistic: Boolean(message.isOptimistic),
+    deliveredAt: message.deliveredAt,
+    seenAt: message.seenAt,
   };
 };
 
@@ -79,6 +76,7 @@ export const createOptimisticMessage = ({ chatId, content, image, currentUser })
     content: content || image || "",
     image,
     time: formatTime(now),
+    createdAt: now.toISOString(),
     isOwn: true,
     isOptimistic: true,
   };
