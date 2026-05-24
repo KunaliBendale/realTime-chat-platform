@@ -10,6 +10,7 @@ dotenv.config();
 import authRoutes from './src/routes/authRoutes.js';
 import chatRoutes from './src/routes/chatRoutes.js';
 import contactRoutes from './src/routes/contactRoutes.js';
+import aiRoutes from './src/ai/routes/aiRoutes.js';
 
 
 // Connect Database
@@ -36,6 +37,7 @@ app.use(express.static(path.join(process.cwd(), "public")));
 app.use("/api/auth", authRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/contacts", contactRoutes);
+app.use("/api/ai", aiRoutes);
 
 const PORT = process.env.PORT || 5000;
 

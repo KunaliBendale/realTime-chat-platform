@@ -69,12 +69,16 @@ export function DashboardPage() {
   }, [isChatsLoading, isContactsLoading]);
 
   useEffect(() => {
-    if (!selectedChatId && dummyChats[0]?.id && !chats.length) {
+    if (!token && !selectedChatId && dummyChats[0]?.id) {
       openConversation(dummyChats[0].id);
     }
-  }, [chats.length, openConversation, selectedChatId]);
+  }, [openConversation, selectedChatId, token]);
 
-  const visibleChats = chats.length ? chats : dummyChats;
+  const visibleChats = useMemo(() => {
+    if (chats.length) return chats;
+    if (!token) return dummyChats;
+    return [];
+  }, [chats, token]);
   const selectedChat = useMemo(
     () =>
       visibleChats.find((chat) => chat.id === selectedChatId) || visibleChats[0] || null,

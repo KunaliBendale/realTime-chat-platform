@@ -168,6 +168,45 @@ class SocketService {
   markMessagesSeen({ chatId, messageIds }) {
     return this.emit("messagesSeen", { chatId, messageIds });
   }
+
+  requestSmartReplies({ chatId, forceRefresh = false }, timeoutMs = 14000) {
+    return new Promise((resolve, reject) => {
+      if (!this.socket?.connected) {
+        const error = new Error("Socket not connected");
+        error.fallbackToRest = true;
+        reject(error);
+        return;
+      }
+
+      const timer = window.setTimeout(() => {
+        const error = new Error("Smart reply request timed out");
+        error.fallbackToRest = true;
+        reject(error);
+      }, timeoutMs);
+
+      this.socket.emit("smartReplies:request", { chatId, forceRefresh }, (response) => {
+        window.clearTimeout(timer);
+
+        if (!response) {
+          const error = new Error("No response from smart replies service");
+          error.fallbackToRest = true;
+          reject(error);
+          return;
+        }
+
+        if (response?.success) {
+          resolve(response);
+          return;
+        }
+
+        const error = new Error(response?.message || "Failed to load smart replies");
+        error.code = response?.code;
+        error.retryable = response?.retryable;
+        error.fallbackToRest = response?.code !== "AI_RATE_LIMITED";
+        reject(error);
+      });
+    });
+  }
 }
 
 export const socketEvents = SOCKET_EVENTS;

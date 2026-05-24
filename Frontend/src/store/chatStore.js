@@ -4,6 +4,7 @@ import {
   mapChatFromApi,
   mapMessageFromApi,
 } from "../lib/chatMappers";
+import { isValidObjectId } from "../lib/isValidObjectId";
 import { tokenStorage } from "../lib/tokenStorage";
 import { chatService } from "../services/chatService";
 import { contactService } from "../services/contactService";
@@ -166,8 +167,17 @@ export const useChatStore = create((set, get) => ({
   openConversation: async (chatId) => {
     set({ selectedChatId: chatId });
 
-    if (!chatId || !tokenStorage.getToken()) {
+    if (!chatId) {
       return { success: false };
+    }
+
+    if (!tokenStorage.getToken()) {
+      return { success: true };
+    }
+
+    if (!isValidObjectId(chatId)) {
+      set({ isMessagesLoading: false, error: null });
+      return { success: true };
     }
 
     return get().fetchMessages(chatId);
@@ -181,6 +191,11 @@ export const useChatStore = create((set, get) => ({
         error: "Sign in to load backend messages. Preview data is shown for now.",
       });
       return { success: false };
+    }
+
+    if (!isValidObjectId(chatId)) {
+      set({ isMessagesLoading: false, error: null });
+      return { success: true };
     }
 
     set({ isMessagesLoading: true, error: null });

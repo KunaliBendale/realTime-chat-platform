@@ -4,6 +4,7 @@ import express from "express";
 import dotenv from "dotenv";
 
 import Message from "../models/messageModel.js";
+import { registerSmartReplySocketHandlers } from "../ai/socket/smartReply.socket.js";
 import socketAuthMiddleware from "../middleware/socket.auth.middleware.js";
 import { resolveChatForMessage } from "../controllers/chatController.js";
 
@@ -113,6 +114,8 @@ io.on("connection", (socket) => {
     ========================= */
 
     addOnlineSocket(userId, socket.id);
+
+    registerSmartReplySocketHandlers(io, socket);
 
     // personal room
     socket.join(userId);
