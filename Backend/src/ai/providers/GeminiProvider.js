@@ -29,7 +29,7 @@ export class GeminiProvider extends BaseProvider {
     return `${this.baseUrl}/models/${this.model}:generateContent`;
   }
 
-  async generateStructuredCompletion({ systemPrompt, userPrompt }) {
+  async generateStructuredCompletion({ systemPrompt, userPrompt, schemaHint }) {
     if (!this.apiKey) {
       throw new AiError("Gemini API key missing", {
         code: AiErrorCodes.NOT_CONFIGURED,
@@ -38,6 +38,19 @@ export class GeminiProvider extends BaseProvider {
     }
 
     const url = this.getGenerateContentUrl();
+
+    const defaultResponseSchema = {
+      type: "object",
+      properties: {
+        suggestions: {
+          type: "array",
+          items: { type: "string" },
+          minItems: 1,
+          maxItems: 3,
+        },
+      },
+      required: ["suggestions"],
+    };
 
     const buildBody = ({ useSchema }) => ({
       systemInstruction: {
@@ -56,18 +69,7 @@ export class GeminiProvider extends BaseProvider {
         responseMimeType: "application/json",
         ...(useSchema
           ? {
-              responseSchema: {
-                type: "object",
-                properties: {
-                  suggestions: {
-                    type: "array",
-                    items: { type: "string" },
-                    minItems: 1,
-                    maxItems: 3,
-                  },
-                },
-                required: ["suggestions"],
-              },
+              responseSchema: schemaHint?.responseSchema || defaultResponseSchema,
             }
           : {}),
       },
@@ -120,14 +122,15 @@ export class GeminiProvider extends BaseProvider {
         });
       }
 
+      let json = null;
       let suggestions = [];
 
       try {
-        const parsed = JSON.parse(text);
-        if (Array.isArray(parsed?.suggestions)) {
-          suggestions = parsed.suggestions.filter((item) => typeof item === "string");
-        } else if (Array.isArray(parsed)) {
-          suggestions = parsed.filter((item) => typeof item === "string");
+        json = JSON.parse(text);
+        if (Array.isArray(json?.suggestions)) {
+          suggestions = json.suggestions.filter((item) => typeof item === "string");
+        } else if (Array.isArray(json)) {
+          suggestions = json.filter((item) => typeof item === "string");
         }
       } catch {
         // smartReply.service parseProviderSuggestions handles non-JSON text
@@ -135,6 +138,7 @@ export class GeminiProvider extends BaseProvider {
 
       return {
         text,
+        json,
         suggestions,
         usage: this.normalizeUsage({
           promptTokens: usageMetadata.promptTokenCount || 0,

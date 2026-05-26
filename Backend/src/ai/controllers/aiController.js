@@ -1,6 +1,7 @@
 import { assertAiConfigured } from "../config/ai.config.js";
 import { AiError, toAiErrorResponse } from "../errors/AiError.js";
-import { smartReplyService } from "../services/smartReply.service.js";
+import { smartReplyService } from "../services/smartReply.service.js";
+import { messageEnhancementService } from "../services/messageEnhancement.service.js";
 import { getDefaultSuggestions } from "../utils/defaultSuggestions.js";
 import { sanitizeSuggestions } from "../utils/sanitize.js";
 
@@ -53,7 +54,7 @@ export const getSmartReplySuggestions = async (req, res) => {
   }
 };
 
-export const getAiStatus = async (_req, res) => {
+export const getAiStatus = async (_req, res) => {
   const status = assertAiConfigured();
 
   return res.status(200).json({
@@ -63,4 +64,33 @@ export const getAiStatus = async (_req, res) => {
     provider: process.env.AI_PROVIDER || "gemini",
     model: process.env.GEMINI_MODEL || "gemini-2.0-flash",
   });
-};
+};
+
+export const enhanceMessage = async (req, res) => {
+  try {
+    const result = await messageEnhancementService.enhance({
+      userId: req.user._id,
+      message: req.body.message,
+      tone: req.body.tone,
+    });
+
+    return res.status(200).json({
+      success: true,
+      enhancedMessage: result.enhancedMessage,
+      tone: result.tone,
+      cached: Boolean(result.cached),
+      meta: result.meta,
+    });
+  } catch (error) {
+    const statusCode = error instanceof AiError ? error.statusCode : 503;
+    const payload = toAiErrorResponse(error);
+
+    return res.status(statusCode || 503).json({
+      ...payload,
+      message:
+        payload.code === "AI_VALIDATION"
+          ? payload.message
+          : "Unable to enhance message right now",
+    });
+  }
+};

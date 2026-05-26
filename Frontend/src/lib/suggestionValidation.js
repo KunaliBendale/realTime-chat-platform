@@ -26,7 +26,7 @@ const META_PATTERNS = [
   /```/,
   /^"suggestions"\s*:/i,
   /^\s*\{\s*"suggestions"/i,
-  /^\s*\[\s*"/,
+  /^\s*\x5B\s*"/,
 ];
 
 const looksLikeMetaOrJson = (value = "") => {
@@ -37,7 +37,7 @@ const looksLikeMetaOrJson = (value = "") => {
     if (pattern.test(trimmed)) return true;
   }
 
-  if (/^\s*[\[{]/.test(trimmed) && /[\]}]\s*$/.test(trimmed)) return true;
+  if (/^\s*[\x5B{]/.test(trimmed) && /[}\x5D]\s*$/.test(trimmed)) return true;
 
   return false;
 };

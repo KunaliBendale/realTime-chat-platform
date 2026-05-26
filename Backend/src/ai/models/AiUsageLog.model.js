@@ -16,7 +16,7 @@ const aiUsageLogSchema = new mongoose.Schema(
     feature: {
       type: String,
       required: true,
-      enum: ["smart_reply"],
+      enum: ["smart_reply", "message_enhancement"],
       default: "smart_reply",
     },
     provider: { type: String, required: true },

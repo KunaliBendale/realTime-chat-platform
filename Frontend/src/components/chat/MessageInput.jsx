@@ -1,7 +1,9 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { ImagePlus, Send, Smile, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useMessageEnhancement } from "../../hooks/useMessageEnhancement";
 import { Button } from "../ui/Button";
+import { AIEnhanceButton } from "./ai/AIEnhanceButton";
 import { SmartReplySuggestions } from "./SmartReplySuggestions";
 
 export function MessageInput({
@@ -16,14 +18,9 @@ export function MessageInput({
   const [image, setImage] = useState("");
   const [showImageField, setShowImageField] = useState(false);
   const [hideSuggestionsWhileTyping, setHideSuggestionsWhileTyping] = useState(false);
+  const messageEnhancement = useMessageEnhancement();
 
   const canSend = message.trim() || image.trim();
-
-  useEffect(() => {
-    if (!message.trim()) {
-      setHideSuggestionsWhileTyping(false);
-    }
-  }, [message]);
 
   const handleSubmit = (event) => {
     event.preventDefault();
@@ -53,6 +50,7 @@ export function MessageInput({
   const handleMessageChange = (event) => {
     const value = event.target.value;
     setMessage(value);
+    messageEnhancement.clearError();
 
     if (value.trim()) {
       setHideSuggestionsWhileTyping(true);
@@ -70,8 +68,22 @@ export function MessageInput({
     onStopTyping(chat);
   };
 
-  const showSmartReplies =
-    smartReplies?.visible && !hideSuggestionsWhileTyping && !canSend;
+  const handleEnhanceTone = async (tone) => {
+    const enhancedMessage = await messageEnhancement.enhanceMessage({
+      message,
+      tone,
+    });
+
+    if (!enhancedMessage) return;
+
+    setMessage(enhancedMessage);
+    setHideSuggestionsWhileTyping(true);
+    smartReplies?.dismiss?.();
+    onTyping(chat);
+  };
+
+  const shouldHideSuggestions = hideSuggestionsWhileTyping && Boolean(message.trim());
+  const showSmartReplies = smartReplies?.visible && !shouldHideSuggestions && !canSend;
 
   return (
     <div className="shrink-0">
@@ -91,6 +103,18 @@ export function MessageInput({
         className="border-t border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-3 py-3 backdrop-blur-xl sm:px-4"
       >
         <AnimatePresence>
+          {messageEnhancement.error ? (
+            <motion.div
+              className="mx-auto mb-3 max-w-3xl rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-2 text-sm font-medium text-[#b91c1c]"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              role="status"
+            >
+              {messageEnhancement.error}
+            </motion.div>
+          ) : null}
+
           {showImageField ? (
             <motion.div
               className="mx-auto mb-3 flex max-w-3xl items-center gap-2 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-input)] p-2"
@@ -134,6 +158,14 @@ export function MessageInput({
             <Button type="button" variant="ghost" size="icon" aria-label="Emoji">
               <Smile size={20} />
             </Button>
+            <AIEnhanceButton
+              activeTone={messageEnhancement.activeTone}
+              disabled={!chat?.id}
+              isEnhancing={messageEnhancement.isEnhancing}
+              message={message}
+              onSelectTone={handleEnhanceTone}
+              status={messageEnhancement.status}
+            />
           </div>
 
           <label className="min-w-0 flex-1">

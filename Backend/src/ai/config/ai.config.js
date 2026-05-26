@@ -40,6 +40,13 @@ export const aiConfig = {
     maxRetries: parseIntEnv("AI_MAX_RETRIES", 2),
   },
 
+  messageEnhancement: {
+    maxInputLength: parseIntEnv("AI_ENHANCE_MAX_INPUT_LENGTH", 800),
+    maxOutputLength: parseIntEnv("AI_ENHANCE_MAX_OUTPUT_LENGTH", 900),
+    minMeaningfulLength: parseIntEnv("AI_ENHANCE_MIN_LENGTH", 4),
+    cacheTtlMs: parseIntEnv("AI_ENHANCE_CACHE_TTL_MS", 2 * 60 * 1000),
+  },
+
   rateLimit: {
     windowMs: parseIntEnv("AI_RATE_LIMIT_WINDOW_MS", 60 * 1000),
     maxRequests: parseIntEnv("AI_RATE_LIMIT_MAX_REQUESTS", 15),

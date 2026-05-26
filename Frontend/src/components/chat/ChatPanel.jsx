@@ -1,4 +1,3 @@
-import { useAuthStore } from "../../store/authStore";
 import { useSmartReplies } from "../../hooks/useSmartReplies";
 import { tokenStorage } from "../../lib/tokenStorage";
 import { ChatHeader } from "./ChatHeader";
@@ -21,8 +20,6 @@ export function ChatPanel({
   onTyping,
   onStopTyping,
 }) {
-  const user = useAuthStore((state) => state.user);
-  const currentUserId = user?._id || user?.id;
   const hasToken = Boolean(tokenStorage.getToken());
 
   const smartReplies = useSmartReplies({

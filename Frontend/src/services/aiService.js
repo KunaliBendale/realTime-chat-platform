@@ -35,4 +35,14 @@ export const aiService = {
 
     return normalizeSmartReplyResponse(payload);
   },
+
+  async enhanceMessage({ message, tone }) {
+    const response = await api.post(
+      "/ai/enhance-message",
+      { message, tone },
+      { timeout: 18000 },
+    );
+
+    return response.data;
+  },
 };
