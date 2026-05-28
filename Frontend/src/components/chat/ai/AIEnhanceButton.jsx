@@ -67,7 +67,7 @@ export function AIEnhanceButton({
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.8 }}
-                className="text-cyan-300"
+                className="text-[var(--text-muted)] transition group-hover:text-[var(--text-primary)]"
               >
                 <Sparkles size={19} />
               </motion.span>
@@ -75,7 +75,7 @@ export function AIEnhanceButton({
           </AnimatePresence>
         </Button>
 
-        <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-full border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-3 py-1.5 text-xs font-semibold text-[var(--text-primary)] opacity-0 shadow-[var(--shadow-soft)] transition group-hover:opacity-100 group-focus-within:opacity-100 sm:block">
+        <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] opacity-0 shadow-[var(--shadow-soft)] transition group-hover:opacity-100 group-focus-within:opacity-100 sm:block">
           Enhance Message
         </span>
       </div>

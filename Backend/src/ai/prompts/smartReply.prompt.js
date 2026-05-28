@@ -1,5 +1,18 @@
 import { aiConfig } from "../config/ai.config.js";
 
+export const smartReplyResponseSchema = {
+  type: "object",
+  properties: {
+    suggestions: {
+      type: "array",
+      items: { type: "string" },
+      minItems: 1,
+      maxItems: aiConfig.smartReply.maxSuggestions,
+    },
+  },
+  required: ["suggestions"],
+};
+
 export const buildSmartReplyPrompt = ({
   currentUserName,
   chatName,
@@ -41,13 +54,13 @@ You write as: ${currentUserName}
 Conversation:
 ${transcript || "(no prior messages)"}
 
-LATEST MESSAGE (from ${replyFrom}) — reply to THIS only:
+LATEST MESSAGE (from ${replyFrom}) - reply to THIS only:
 "${replyTarget}"
 
 Examples of correct behavior:
-- If they ask "How are you?" → replies about how you are doing
-- If they ask "How are your studies going?" → replies about studies progress
-- If they say "Thanks!" → replies like "You're welcome" / "Anytime"
+- If they ask "How are you?" -> replies about how you are doing
+- If they ask "How are your studies going?" -> replies about studies progress
+- If they say "Thanks!" -> replies like "You're welcome" / "Anytime"
 
 Return JSON only.`;
 
@@ -58,7 +71,8 @@ export const buildSmartReplyRetryPrompt = ({ currentUserName, lastIncomingMessag
   const target = lastIncomingMessage?.content?.trim() || "";
 
   return {
-    systemPrompt: `Return only JSON: {"suggestions":["a","b","c"]}. Three short chat replies, first person, under 100 characters. Answer the question directly.`,
+    systemPrompt:
+      'Return only JSON: {"suggestions":["a","b","c"]}. Three short chat replies, first person, under 100 characters. Answer the question directly.',
     userPrompt: `As "${currentUserName}", write 3 different natural replies to:\n"${target}"\n\nJSON only, no other text.`,
   };
 };

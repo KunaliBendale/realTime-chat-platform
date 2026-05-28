@@ -2,9 +2,24 @@ import { api } from "../lib/api";
 import { normalizeSmartReplyResponse } from "../lib/normalizeSmartReplyResponse";
 import { socketService } from "./socketService";
 
+const AI_FALLBACK_MESSAGE = "AI is unavailable right now";
+
+const requestAi = async (request) => {
+  try {
+    return await request();
+  } catch (error) {
+    const cleanError = new Error(
+      error.response?.data?.message || error.message || AI_FALLBACK_MESSAGE,
+    );
+    cleanError.status = error.response?.status;
+    cleanError.code = error.response?.data?.code;
+    throw cleanError;
+  }
+};
+
 export const aiService = {
   async getStatus() {
-    const response = await api.get("/ai/status");
+    const response = await requestAi(() => api.get("/ai/status"));
     return response.data;
   },
 
@@ -26,10 +41,12 @@ export const aiService = {
     }
 
     if (!payload) {
-      const response = await api.get(`/ai/smart-replies/${chatId}`, {
-        params: forceRefresh ? { refresh: "true" } : undefined,
-        timeout: 15000,
-      });
+      const response = await requestAi(() =>
+        api.get(`/ai/smart-replies/${chatId}`, {
+          params: forceRefresh ? { refresh: "true" } : undefined,
+          timeout: 15000,
+        }),
+      );
       payload = response.data;
     }
 
@@ -37,10 +54,8 @@ export const aiService = {
   },
 
   async enhanceMessage({ message, tone }) {
-    const response = await api.post(
-      "/ai/enhance-message",
-      { message, tone },
-      { timeout: 18000 },
+    const response = await requestAi(() =>
+      api.post("/ai/enhance-message", { message, tone }, { timeout: 18000 }),
     );
 
     return response.data;

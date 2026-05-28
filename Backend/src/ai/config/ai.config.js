@@ -7,27 +7,27 @@ const parseIntEnv = (key, fallback) => {
   return Number.isFinite(value) ? value : fallback;
 };
 
+const parseListEnv = (key, fallback = []) => {
+  const values = (process.env[key] || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  return values.length ? values : fallback;
+};
+
 export const aiConfig = {
   enabled: process.env.AI_ENABLED !== "false",
-  provider: (process.env.AI_PROVIDER || "gemini").toLowerCase(),
 
   gemini: {
     apiKey: process.env.GEMINI_API_KEY || "",
-    // See https://ai.google.dev/gemini-api/docs/quickstart (e.g. gemini-2.0-flash, gemini-3.5-flash)
     model: process.env.GEMINI_MODEL || "gemini-2.0-flash",
+    fallbackModels: parseListEnv("GEMINI_FALLBACK_MODELS", [
+      "gemini-2.0-flash",
+    ]),
     baseUrl:
       process.env.GEMINI_BASE_URL ||
       "https://generativelanguage.googleapis.com/v1beta",
-  },
-
-  openai: {
-    apiKey: process.env.OPENAI_API_KEY || "",
-    model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-  },
-
-  claude: {
-    apiKey: process.env.ANTHROPIC_API_KEY || "",
-    model: process.env.CLAUDE_MODEL || "claude-3-5-haiku-20241022",
   },
 
   smartReply: {
@@ -58,18 +58,8 @@ export const assertAiConfigured = () => {
     return { ok: false, reason: "AI features are disabled" };
   }
 
-  const provider = aiConfig.provider;
-
-  if (provider === "gemini" && !aiConfig.gemini.apiKey) {
+  if (!aiConfig.gemini.apiKey) {
     return { ok: false, reason: "GEMINI_API_KEY is not configured" };
-  }
-
-  if (provider === "openai" && !aiConfig.openai.apiKey) {
-    return { ok: false, reason: "OPENAI_API_KEY is not configured" };
-  }
-
-  if (provider === "claude" && !aiConfig.claude.apiKey) {
-    return { ok: false, reason: "ANTHROPIC_API_KEY is not configured" };
   }
 
   return { ok: true };
