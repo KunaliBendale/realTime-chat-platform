@@ -6,14 +6,15 @@ import { AiError, AiErrorCodes } from "../errors/AiError.js";
 import {
   buildSmartReplyPrompt,
   buildSmartReplyRetryPrompt,
+  smartReplyResponseSchema,
 } from "../prompts/smartReply.prompt.js";
-import { getAiProvider } from "../providers/providerFactory.js";
 import { aiDebug } from "../utils/aiDebug.js";
 import { getDefaultSuggestions } from "../utils/defaultSuggestions.js";
-import { resolveSuggestionsFromProviderResult } from "../utils/parseProviderSuggestions.js";
+import { buildFallbackSmartReplies } from "../utils/localFallbacks.js";
+import { resolveSmartReplySuggestions } from "../utils/parseSmartReplySuggestions.js";
 import { sanitizePromptInput } from "../utils/sanitize.js";
-import { withRetry, withTimeout } from "../utils/retry.js";
 import { aiCache } from "./cache.service.js";
+import { geminiService } from "./gemini.service.js";
 import { aiRateLimiter } from "./rateLimiter.service.js";
 import { logAiUsage } from "./tokenLogger.service.js";
 
@@ -31,26 +32,23 @@ const mapMessageForAi = (message, currentUserId) => {
   };
 };
 
-const callProvider = async (provider, prompts) => {
-  return withRetry(
-    () =>
-      withTimeout(
-        provider.generateStructuredCompletion(prompts),
-        aiConfig.smartReply.requestTimeoutMs,
-        "AI request timed out",
-      ),
-    { maxRetries: aiConfig.smartReply.maxRetries },
-  );
-};
+const generateSmartReplies = (prompts) =>
+  geminiService.generateJson({
+    ...prompts,
+    responseSchema: smartReplyResponseSchema,
+    maxOutputTokens: 768,
+  });
 
 const buildDefaultReplyResult = ({ lastMessage, reason, cached = false }) => ({
-  suggestions: getDefaultSuggestions(aiConfig.smartReply.maxSuggestions),
+  suggestions: lastMessage?.content
+    ? buildFallbackSmartReplies(lastMessage.content, aiConfig.smartReply.maxSuggestions)
+    : getDefaultSuggestions(aiConfig.smartReply.maxSuggestions),
   cached,
   reason,
   meta: {
     shouldSuggest: true,
     lastMessageId: lastMessage?.id,
-    source: "default",
+    source: lastMessage?.content ? "local_fallback" : "default",
     aiGenerated: false,
   },
 });
@@ -117,7 +115,6 @@ export class SmartReplyService {
       "smart-reply-v7",
       chatId,
       lastMessage.id,
-      aiConfig.provider,
       aiConfig.gemini.model,
     ]);
 
@@ -135,7 +132,7 @@ export class SmartReplyService {
           success: true,
         });
 
-        const cachedResolved = resolveSuggestionsFromProviderResult(
+        const cachedResolved = resolveSmartReplySuggestions(
           { suggestions: cached.suggestions },
           aiConfig.smartReply.maxSuggestions,
           aiConfig.smartReply.maxSuggestionLength,
@@ -181,18 +178,17 @@ export class SmartReplyService {
       lastIncomingMessage: lastMessage,
     });
 
-    const provider = getAiProvider();
     const startedAt = Date.now();
 
     let suggestions = [];
     let usage = {};
-    let providerName = provider.name;
+    let providerName = geminiService.provider;
     let modelName = aiConfig.gemini.model || "unknown";
     let generationReason = "generated";
     let parseSource = "unknown";
 
     try {
-      let result = await callProvider(provider, mainPrompts);
+      let result = await generateSmartReplies(mainPrompts);
 
       usage = result.usage;
       providerName = result.usage.provider;
@@ -200,7 +196,7 @@ export class SmartReplyService {
 
       aiDebug("raw provider text (attempt 1)", result.text?.slice(0, 500));
 
-      let resolved = resolveSuggestionsFromProviderResult(
+      let resolved = resolveSmartReplySuggestions(
         result,
         aiConfig.smartReply.maxSuggestions,
         aiConfig.smartReply.maxSuggestionLength,
@@ -216,12 +212,12 @@ export class SmartReplyService {
           lastIncomingMessage: lastMessage,
         });
 
-        result = await callProvider(provider, retryPrompts);
+        result = await generateSmartReplies(retryPrompts);
         usage = result.usage;
 
         aiDebug("raw provider text (attempt 2)", result.text?.slice(0, 500));
 
-        resolved = resolveSuggestionsFromProviderResult(
+        resolved = resolveSmartReplySuggestions(
           result,
           aiConfig.smartReply.maxSuggestions,
           aiConfig.smartReply.maxSuggestionLength,
@@ -248,7 +244,7 @@ export class SmartReplyService {
         usage,
         latencyMs: Date.now() - startedAt,
         success: false,
-        errorCode: error.code || AiErrorCodes.PROVIDER,
+        errorCode: error.code || AiErrorCodes.GEMINI,
       });
 
       aiDebug("AI provider error, using default suggestions", {

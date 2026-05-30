@@ -42,7 +42,7 @@ export function ToneSelector({
       {open ? (
         <motion.div
           ref={panelRef}
-          className="fixed inset-x-3 bottom-24 z-50 overflow-hidden rounded-3xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-2 shadow-[var(--shadow-float)] backdrop-blur-xl sm:absolute sm:bottom-12 sm:left-0 sm:right-auto sm:w-64 sm:rounded-2xl"
+          className="fixed inset-x-3 bottom-24 z-50 overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-2 shadow-[var(--shadow-float)] backdrop-blur-xl sm:absolute sm:bottom-12 sm:left-0 sm:right-auto sm:w-64"
           initial={{ opacity: 0, y: 16, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 12, scale: 0.98 }}
@@ -51,7 +51,7 @@ export function ToneSelector({
           aria-label="Choose enhancement tone"
         >
           <div className="px-3 py-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
+            <p className="text-xs font-semibold uppercase text-[var(--text-muted)]">
               Enhance tone
             </p>
           </div>
@@ -67,7 +67,7 @@ export function ToneSelector({
                   role="menuitem"
                   disabled={disabled || isLoading}
                   onClick={() => onSelectTone(tone.id)}
-                  className="flex min-h-11 items-center justify-between rounded-2xl px-3 py-2 text-left text-sm font-semibold text-[var(--text-primary)] transition hover:bg-white/10 focus-visible:bg-white/10 disabled:opacity-50"
+                  className="flex min-h-11 items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-medium text-[var(--text-primary)] transition hover:bg-white/10 focus-visible:bg-white/10 disabled:opacity-50"
                 >
                   {tone.label}
                   {toneLoading ? <Loader2 size={15} className="animate-spin" /> : null}
