@@ -18,8 +18,14 @@ export function Modal({
   footer,
   icon: Icon,
   size = "md",
+  bodyClassName = "",
+  panelClassName = "",
+  scrollable = true,
 }) {
   const sizeClass = sizeClasses[size] || sizeClasses.md;
+  const bodyScrollClass = scrollable
+    ? "custom-scrollbar overflow-y-auto"
+    : "overflow-y-auto sm:overflow-visible";
 
   return (
     <AnimatePresence>
@@ -42,7 +48,7 @@ export function Modal({
             role="dialog"
             aria-modal="true"
             aria-labelledby="modal-title"
-            className={`relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-3xl glass-elevated sm:max-h-[88vh] sm:rounded-3xl ${sizeClass}`}
+            className={`relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-3xl glass-elevated sm:max-h-[88vh] sm:rounded-3xl ${sizeClass} ${panelClassName}`}
             initial={{ opacity: 0, y: 48, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 48, scale: 0.96 }}
@@ -79,7 +85,7 @@ export function Modal({
               </Button>
             </header>
 
-            <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+            <div className={`min-h-0 flex-1 px-5 py-5 sm:px-6 ${bodyScrollClass} ${bodyClassName}`}>
               {children}
             </div>
 

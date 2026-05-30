@@ -11,6 +11,7 @@ import authRoutes from './src/routes/authRoutes.js';
 import chatRoutes from './src/routes/chatRoutes.js';
 import contactRoutes from './src/routes/contactRoutes.js';
 import aiRoutes from './src/ai/routes/aiRoutes.js';
+import profileRoutes from './src/routes/profileRoutes.js';
 
 
 // Connect Database
@@ -32,12 +33,14 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 app.use(express.static(path.join(process.cwd(), "public")));
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 //Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/contacts", contactRoutes);
 app.use("/api/ai", aiRoutes);
+app.use("/api/profile", profileRoutes);
 
 const PORT = process.env.PORT || 5000;
 

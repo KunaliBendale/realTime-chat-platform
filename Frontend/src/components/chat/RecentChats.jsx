@@ -6,7 +6,6 @@ import { Avatar } from "../ui/Avatar";
 import { Button } from "../ui/Button";
 import { ChatListSkeleton } from "../ui/Skeleton";
 import { ChatListItem } from "./ChatListItem";
-import { ChatAvatar } from "./ChatAvatar";
 
 const getContactUserId = (contact) => contact.userId || contact.user?._id || contact.user?.id;
 
@@ -29,6 +28,7 @@ export function RecentChats({
   onStartContactChat,
   onOpenAction,
   onOpenSettings,
+  onOpenOwnProfile,
 }) {
   const user = useAuthStore((state) => state.user);
   const [search, setSearch] = useState("");
@@ -88,7 +88,7 @@ export function RecentChats({
         <div className="flex items-center justify-between gap-3">
           <button
             type="button"
-            onClick={onOpenSettings}
+            onClick={onOpenOwnProfile || onOpenSettings}
             className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl p-1 text-left transition hover:bg-white/5"
           >
             <Avatar name={user?.name || "You"} src={user?.profilePic} size="md" />

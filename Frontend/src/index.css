@@ -83,7 +83,8 @@ body {
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
 }
 
@@ -94,7 +95,8 @@ button:disabled {
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
-textarea:focus-visible {
+textarea:focus-visible,
+select:focus-visible {
   outline: 2px solid rgba(99, 102, 241, 0.55);
   outline-offset: 2px;
 }
@@ -153,6 +155,30 @@ textarea:focus-visible {
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   pointer-events: none;
+}
+
+.profile-input {
+  width: 100%;
+  border-radius: 1rem;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  outline: none;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.profile-input::placeholder {
+  color: var(--text-muted);
+}
+
+.profile-input:focus {
+  border-color: rgba(99, 102, 241, 0.42);
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.12);
 }
 
 /* Scrollbars */

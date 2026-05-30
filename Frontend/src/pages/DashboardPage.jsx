@@ -1,24 +1,31 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { ChatActions } from "../components/chat/ChatActions";
 import { ChatPanel } from "../components/chat/ChatPanel";
 import { EmptyChatState } from "../components/chat/EmptyChatState";
 import { MediaViewerModal } from "../components/chat/MediaViewerModal";
 import { PostLoginLoader } from "../components/chat/PostLoginLoader";
-import { ProfileModal } from "../components/chat/ProfileModal";
 import { RecentChats } from "../components/chat/RecentChats";
 import { SettingsModal } from "../components/chat/SettingsModal";
+import { ProfileModal } from "../components/profile/ProfileModal";
 import { dummyChats } from "../data/dummyChats";
 import { useIsMobile } from "../hooks/useMediaQuery";
-import { getSocketRecipientId } from "../lib/chatMappers";
+import { getOtherParticipant, getSocketRecipientId } from "../lib/chatMappers";
+import { profileService } from "../services/profileService";
 import { socketService } from "../services/socketService";
 import { useAuthStore } from "../store/authStore";
 import { useChatStore } from "../store/chatStore";
 
 export function DashboardPage() {
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
   const token = useAuthStore((state) => state.token);
   const user = useAuthStore((state) => state.user);
+  const refreshProfile = useAuthStore((state) => state.refreshProfile);
+  const updateProfile = useAuthStore((state) => state.updateProfile);
+  const updateProfileImage = useAuthStore((state) => state.updateProfileImage);
+  const logout = useAuthStore((state) => state.logout);
   const currentUserId = user?._id || user?.id;
 
   const chats = useChatStore((state) => state.chats);
@@ -48,7 +55,13 @@ export function DashboardPage() {
   const sendMessageWithRest = useChatStore((state) => state.sendMessageWithRest);
 
   const [activeChatAction, setActiveChatAction] = useState(null);
-  const [showProfile, setShowProfile] = useState(false);
+  const [profileContext, setProfileContext] = useState(null);
+  const [profileUser, setProfileUser] = useState(null);
+  const [isProfileLoading, setIsProfileLoading] = useState(false);
+  const [isProfileSaving, setIsProfileSaving] = useState(false);
+  const [isProfileUploading, setIsProfileUploading] = useState(false);
+  const [profileMessage, setProfileMessage] = useState("");
+  const [profileError, setProfileError] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [mediaPreview, setMediaPreview] = useState(null);
   const [mobileShowChat, setMobileShowChat] = useState(false);
@@ -127,6 +140,12 @@ export function DashboardPage() {
   );
 
   useEffect(() => {
+    if (profileContext === "own") {
+      setProfileUser(user);
+    }
+  }, [profileContext, user]);
+
+  useEffect(() => {
     if (!selectedChat || !token || !chats.length) return;
 
     socketService.joinChat({
@@ -180,8 +199,131 @@ export function DashboardPage() {
     });
   };
 
+  const clearProfileFeedback = () => {
+    setProfileMessage("");
+    setProfileError("");
+  };
+
+  const handleOpenOwnProfile = async () => {
+    setProfileContext("own");
+    setProfileUser(user);
+    clearProfileFeedback();
+
+    if (!token) return;
+
+    setIsProfileLoading(true);
+    const result = await refreshProfile();
+    if (result.success && result.user) {
+      setProfileUser(result.user);
+    } else if (!result.success) {
+      setProfileError("Unable to load profile right now");
+    }
+    setIsProfileLoading(false);
+  };
+
+  const handleOpenChatProfile = async () => {
+    if (!selectedChat) return;
+
+    clearProfileFeedback();
+
+    if (selectedChat.isGroup) {
+      setProfileContext("group");
+      setProfileUser({
+        name: selectedChat.name,
+        profilePic: selectedChat.profilePic,
+        status: selectedChat.role,
+        createdAt: selectedChat.raw?.createdAt,
+      });
+      return;
+    }
+
+    const participant =
+      getOtherParticipant(selectedChat.raw || selectedChat, currentUserId) || {
+        name: selectedChat.name,
+        email: selectedChat.role,
+        profilePic: selectedChat.profilePic,
+        status: selectedChat.status,
+      };
+
+    const participantId = participant?._id || participant?.id;
+
+    setProfileContext("contact");
+    setProfileUser(participant);
+
+    if (!token || !participantId) return;
+
+    setIsProfileLoading(true);
+    try {
+      const fullProfile = await profileService.getUserProfile(participantId);
+      setProfileUser(fullProfile || participant);
+    } catch {
+      setProfileError("Unable to load profile right now");
+    } finally {
+      setIsProfileLoading(false);
+    }
+  };
+
+  const handleCloseProfile = () => {
+    setProfileContext(null);
+    setProfileUser(null);
+    setIsProfileLoading(false);
+    setIsProfileSaving(false);
+    setIsProfileUploading(false);
+    clearProfileFeedback();
+  };
+
+  const handleSaveProfile = async (payload) => {
+    if (!payload.name) {
+      setProfileError("Name is required");
+      return;
+    }
+
+    if (!/^\d{10}$/.test(payload.mobile)) {
+      setProfileError("Mobile number must be 10 digits");
+      return;
+    }
+
+    setIsProfileSaving(true);
+    clearProfileFeedback();
+
+    const result = await updateProfile(payload);
+
+    if (result.success) {
+      setProfileUser(result.user);
+      setIsProfileSaving(false);
+      handleCloseProfile();
+    } else {
+      setProfileError(result.message || "Unable to update profile right now");
+      setIsProfileSaving(false);
+    }
+  };
+
+  const handleUploadProfileImage = async (file) => {
+    setIsProfileUploading(true);
+    clearProfileFeedback();
+
+    const result = await updateProfileImage(file);
+
+    if (result.success) {
+      setProfileUser(result.user);
+      setProfileMessage("Profile image updated successfully");
+    } else {
+      setProfileError("Unable to update profile image right now");
+    }
+
+    setIsProfileUploading(false);
+  };
+
+  const handleProfileLogout = () => {
+    logout();
+    handleCloseProfile();
+    navigate("/login", { replace: true });
+  };
+
   const showSidebar = !isMobile || !mobileShowChat;
   const showChatPanel = !isMobile || mobileShowChat;
+  const isOwnProfile = profileContext === "own";
+  const isGroupProfile = profileContext === "group";
 
   return (
     <>
@@ -209,6 +351,7 @@ export function DashboardPage() {
                 onStartContactChat={accessChat}
                 onOpenAction={setActiveChatAction}
                 onOpenSettings={() => setShowSettings(true)}
+                onOpenOwnProfile={handleOpenOwnProfile}
               />
             </motion.div>
           ) : null}
@@ -244,7 +387,7 @@ export function DashboardPage() {
                     isOnline={isChatOnline}
                     showBack={isMobile}
                     onBack={handleBackToList}
-                    onOpenProfile={() => setShowProfile(true)}
+                    onOpenProfile={handleOpenChatProfile}
                     onOpenSettings={() => setShowSettings(true)}
                     onImageClick={setMediaPreview}
                     onPrepareOptimisticMessage={prepareOptimisticMessage}
@@ -276,10 +419,22 @@ export function DashboardPage() {
       />
 
       <ProfileModal
-        isOpen={showProfile}
-        onClose={() => setShowProfile(false)}
-        chat={selectedChat}
+        isOpen={Boolean(profileContext)}
+        onClose={handleCloseProfile}
+        user={profileUser}
+        isOwn={isOwnProfile}
+        isGroup={isGroupProfile}
         isOnline={isChatOnline}
+        membersCount={selectedChat?.users?.length || selectedChat?.raw?.users?.length || 0}
+        isLoading={isProfileLoading}
+        isSaving={isProfileSaving}
+        isUploading={isProfileUploading}
+        message={profileMessage}
+        error={profileError}
+        onSave={handleSaveProfile}
+        onUploadImage={handleUploadProfileImage}
+        onFileError={setProfileError}
+        onLogout={handleProfileLogout}
       />
 
       <SettingsModal

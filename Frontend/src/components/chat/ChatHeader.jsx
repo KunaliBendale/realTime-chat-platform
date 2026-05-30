@@ -14,7 +14,7 @@ export function ChatHeader({
   onOpenSettings,
 }) {
   const statusText = isTyping
-    ? "typing…"
+    ? "typing..."
     : chat.isGroup
       ? chat.role
       : isOnline

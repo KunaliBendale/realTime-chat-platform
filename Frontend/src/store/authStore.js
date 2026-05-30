@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import { authService } from "../services/authService";
+import { profileService } from "../services/profileService";
+import { socketService } from "../services/socketService";
 import { tokenStorage } from "../lib/tokenStorage";
 
 const getInitialAuthState = () => {
@@ -125,7 +127,70 @@ export const useAuthStore = create((set) => ({
     return { success: true };
   },
 
+  refreshProfile: async () => {
+    try {
+      const user = await profileService.getMyProfile();
+
+      if (user) {
+        tokenStorage.setUser(user);
+        set({ user, error: null });
+      }
+
+      return { success: true, user };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message || "Unable to load profile right now",
+      };
+    }
+  },
+
+  updateProfile: async (payload) => {
+    try {
+      const user = await profileService.updateMyProfile(payload);
+
+      if (user) {
+        tokenStorage.setUser(user);
+        set({
+          user,
+          error: null,
+          successMessage: "Profile updated successfully",
+        });
+      }
+
+      return { success: true, user };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message || "Unable to update profile right now",
+      };
+    }
+  },
+
+  updateProfileImage: async (file) => {
+    try {
+      const user = await profileService.updateProfileImage(file);
+
+      if (user) {
+        tokenStorage.setUser(user);
+        set({
+          user,
+          error: null,
+          successMessage: "Profile image updated successfully",
+        });
+      }
+
+      return { success: true, user };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message || "Unable to update profile image right now",
+      };
+    }
+  },
+
   logout: () => {
+    socketService.disconnect();
     tokenStorage.clearAuth();
 
     set({
