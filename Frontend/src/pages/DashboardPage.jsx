@@ -85,24 +85,6 @@ export function DashboardPage() {
     [selectedChatId, visibleChats],
   );
 
-  const hasLoadedSelectedMessages = selectedChat
-    ? Boolean(messagesByChatId[selectedChat.id])
-    : false;
-
-  useEffect(() => {
-    if (!token || !chats.length || !selectedChat?.id || hasLoadedSelectedMessages) {
-      return;
-    }
-
-    openConversation(selectedChat.id);
-  }, [
-    chats.length,
-    hasLoadedSelectedMessages,
-    openConversation,
-    selectedChat?.id,
-    token,
-  ]);
-
   const messages = useMemo(() => {
     if (!selectedChat) return [];
 

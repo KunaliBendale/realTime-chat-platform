@@ -14,7 +14,7 @@ export const AiErrorCodes = {
   RATE_LIMITED: "AI_RATE_LIMITED",
   VALIDATION: "AI_VALIDATION",
   TIMEOUT: "AI_TIMEOUT",
-  GEMINI: "AI_GEMINI_ERROR",
+  PROVIDER: "AI_PROVIDER_ERROR",
   PARSE: "AI_PARSE_ERROR",
   EMPTY_CONTEXT: "AI_EMPTY_CONTEXT",
 };
@@ -31,7 +31,7 @@ export const toAiErrorResponse = (error) => {
 
   return {
     success: false,
-    code: AiErrorCodes.GEMINI,
+    code: AiErrorCodes.PROVIDER,
     message: "AI service unavailable",
     retryable: true,
   };

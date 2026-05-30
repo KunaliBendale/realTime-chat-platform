@@ -5,60 +5,48 @@ import {
   messageEnhancementResponseSchema,
   normalizeEnhancementTone,
 } from "../prompts/messageEnhancement.prompt.js";
-import { buildFallbackEnhancement } from "../utils/localFallbacks.js";
+import { getAiProvider } from "../providers/providerFactory.js";
 import { sanitizePromptInput, sanitizeText } from "../utils/sanitize.js";
+import { withRetry, withTimeout } from "../utils/retry.js";
 import { aiCache } from "./cache.service.js";
-import { geminiService } from "./gemini.service.js";
 import { aiRateLimiter } from "./rateLimiter.service.js";
 import { logAiUsage } from "./tokenLogger.service.js";
 
 const hasMeaningfulText = (message) => /[\p{L}\p{N}]/u.test(message || "");
-
-const shouldUseFallbackEnhancement = (error) =>
-  [
-    AiErrorCodes.GEMINI,
-    AiErrorCodes.PARSE,
-    AiErrorCodes.TIMEOUT,
-    AiErrorCodes.NOT_CONFIGURED,
-  ].includes(error?.code);
 
 const parseEnhancedMessage = (providerResult) => {
   if (typeof providerResult?.json?.enhancedMessage === "string") {
     return providerResult.json.enhancedMessage;
   }
 
-  const text = providerResult?.text || "";
+  try {
+    const parsed = JSON.parse(providerResult?.text || "{}");
 
-  const tryParse = (candidate) => {
-    try {
-      const parsed = JSON.parse(candidate);
-      return typeof parsed?.enhancedMessage === "string"
-        ? parsed.enhancedMessage
-        : "";
-    } catch {
-      return "";
+    if (typeof parsed?.enhancedMessage === "string") {
+      return parsed.enhancedMessage;
     }
-  };
-
-  const direct = tryParse(text);
-  if (direct) return direct;
-
-  const objectMatch = text.match(/\{[\s\S]*\}/);
-  if (objectMatch) {
-    const fromObject = tryParse(objectMatch[0]);
-    if (fromObject) return fromObject;
-  }
-
-  const propertyMatch = text.match(/"enhancedMessage"\s*:\s*"((?:\\.|[^"\\])*)"?/i);
-  if (propertyMatch?.[1]) {
-    try {
-      return JSON.parse(`"${propertyMatch[1]}"`);
-    } catch {
-      return propertyMatch[1].replace(/\\"/g, '"');
-    }
+  } catch {
+    return "";
   }
 
   return "";
+};
+
+const callProvider = async (provider, prompts) => {
+  return withRetry(
+    () =>
+      withTimeout(
+        provider.generateStructuredCompletion({
+          ...prompts,
+          schemaHint: {
+            responseSchema: messageEnhancementResponseSchema,
+          },
+        }),
+        aiConfig.smartReply.requestTimeoutMs,
+        "AI request timed out",
+      ),
+    { maxRetries: aiConfig.smartReply.maxRetries },
+  );
 };
 
 class MessageEnhancementService {
@@ -99,37 +87,17 @@ class MessageEnhancementService {
     aiRateLimiter.consume(`message-enhancement:${userId}`);
 
     if (!configStatus.ok) {
-      const enhancedMessage = sanitizeText(
-        buildFallbackEnhancement(payload),
-        aiConfig.messageEnhancement.maxOutputLength,
-      );
-
-      await logAiUsage({
-        userId,
-        feature: "message_enhancement",
-        provider: geminiService.provider,
-        model: aiConfig.gemini.model || "unknown",
-        success: false,
-        errorCode: AiErrorCodes.NOT_CONFIGURED,
+      throw new AiError(configStatus.reason, {
+        code: AiErrorCodes.NOT_CONFIGURED,
+        statusCode: 503,
+        retryable: true,
       });
-
-      return {
-        enhancedMessage,
-        tone: payload.tone,
-        cached: false,
-        meta: {
-          provider: geminiService.provider,
-          model: aiConfig.gemini.model || "unknown",
-          source: "local_fallback",
-          aiGenerated: false,
-        },
-      };
     }
 
     const cacheKey = aiCache.buildKey([
       "message-enhancement-v1",
       userId?.toString(),
-      aiConfig.gemini.model,
+      aiConfig.provider,
       payload.tone,
       payload.message,
     ]);
@@ -153,25 +121,22 @@ class MessageEnhancementService {
       };
     }
 
+    const provider = getAiProvider();
     const prompts = buildMessageEnhancementPrompt(payload);
     const startedAt = Date.now();
     let usage = {};
-    let providerName = geminiService.provider;
+    let providerName = provider.name;
     let modelName = aiConfig.gemini.model || "unknown";
 
     try {
-      const result = await geminiService.generateJson({
-        ...prompts,
-        responseSchema: messageEnhancementResponseSchema,
-        maxOutputTokens: 512,
-      });
+      const result = await callProvider(provider, prompts);
       const enhancedMessage = sanitizeText(
         parseEnhancedMessage(result),
         aiConfig.messageEnhancement.maxOutputLength,
       );
 
       usage = result.usage || {};
-      providerName = usage.provider || geminiService.provider;
+      providerName = usage.provider || provider.name;
       modelName = usage.model || modelName;
 
       if (!enhancedMessage || !hasMeaningfulText(enhancedMessage)) {
@@ -223,27 +188,8 @@ class MessageEnhancementService {
         usage,
         latencyMs: Date.now() - startedAt,
         success: false,
-        errorCode: error.code || AiErrorCodes.GEMINI,
+        errorCode: error.code || AiErrorCodes.PROVIDER,
       });
-
-      if (shouldUseFallbackEnhancement(error)) {
-        const enhancedMessage = sanitizeText(
-          buildFallbackEnhancement(payload),
-          aiConfig.messageEnhancement.maxOutputLength,
-        );
-
-        return {
-          enhancedMessage,
-          tone: payload.tone,
-          cached: false,
-          meta: {
-            provider: providerName,
-            model: modelName,
-            source: "local_fallback",
-            aiGenerated: false,
-          },
-        };
-      }
 
       throw error;
     }
