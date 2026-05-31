@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Mail, Lock } from "lucide-react";
 import { AuthAlert } from "../components/auth/AuthAlert";
+import { ForgotPasswordModal } from "../components/auth/ForgotPasswordModal";
 import { AuthShell } from "../components/auth/AuthShell";
 import { FormField } from "../components/auth/FormField";
 import { GoogleAuthButton } from "../components/auth/GoogleAuthButton";
@@ -24,6 +25,8 @@ export function LoginPage() {
 
   const [form, setForm] = useState(initialForm);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
+  const [localSuccessMessage, setLocalSuccessMessage] = useState("");
 
   const isSubmitting = status === "loading";
   const redirectTo = location.state?.from?.pathname || "/dashboard";
@@ -31,8 +34,8 @@ export function LoginPage() {
   const oauthError = new URLSearchParams(location.search).get("oauthError");
 
   const alertMessage = useMemo(
-    () => registrationMessage || successMessage,
-    [registrationMessage, successMessage],
+    () => localSuccessMessage || registrationMessage || successMessage,
+    [localSuccessMessage, registrationMessage, successMessage],
   );
 
   useEffect(() => {
@@ -51,6 +54,7 @@ export function LoginPage() {
       ...currentErrors,
       [name]: "",
     }));
+    setLocalSuccessMessage("");
   };
 
   const validateForm = () => {
@@ -120,8 +124,18 @@ export function LoginPage() {
           disabled={isSubmitting}
         />
 
+        <div className="-mt-2 flex justify-end">
+          <button
+            type="button"
+            onClick={() => setIsForgotPasswordOpen(true)}
+            className="text-sm font-semibold text-indigo-400 transition hover:text-indigo-300"
+          >
+            Forgot Password?
+          </button>
+        </div>
+
         <Button type="submit" disabled={isSubmitting} className="w-full" size="lg">
-          {isSubmitting ? "Signing in…" : "Sign in"}
+          {isSubmitting ? "Signing in..." : "Sign in"}
         </Button>
       </form>
 
@@ -141,6 +155,23 @@ export function LoginPage() {
           Create an account
         </Link>
       </p>
+
+      {isForgotPasswordOpen ? (
+        <ForgotPasswordModal
+          isOpen={isForgotPasswordOpen}
+          initialEmail={form.email}
+          onClose={() => setIsForgotPasswordOpen(false)}
+          onCompleted={(email) => {
+            setIsForgotPasswordOpen(false);
+            setForm((currentForm) => ({
+              ...currentForm,
+              email,
+              password: "",
+            }));
+            setLocalSuccessMessage("Password reset successfully. Please sign in again.");
+          }}
+        />
+      ) : null}
     </AuthShell>
   );
 }

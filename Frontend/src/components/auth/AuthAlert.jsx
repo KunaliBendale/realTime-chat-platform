@@ -12,7 +12,7 @@ export function AuthAlert({ type = "error", message }) {
           exit={{ opacity: 0, y: -8, height: 0 }}
           className={`mb-4 flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm ${
             type === "success"
-              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700"
               : "border-red-500/30 bg-red-500/10 text-red-300"
           }`}
         >

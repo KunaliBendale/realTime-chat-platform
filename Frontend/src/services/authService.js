@@ -31,4 +31,35 @@ export const authService = {
           : response.data?.message || "Registration successful",
     };
   },
+
+  async sendOtp(email) {
+    const response = await api.post("/auth/send-otp", { email });
+
+    return {
+      success: Boolean(response.data?.success),
+      message: response.data?.message || "OTP sent successfully",
+    };
+  },
+
+  async verifyOtp(email, otp) {
+    const response = await api.post("/auth/verify-otp", { email, otp });
+
+    return {
+      success: Boolean(response.data?.success),
+      message: response.data?.message || "OTP verified successfully",
+    };
+  },
+
+  async resetPassword({ email, newPassword, confirmPassword }) {
+    const response = await api.post("/auth/reset-password", {
+      email,
+      newPassword,
+      confirmPassword,
+    });
+
+    return {
+      success: Boolean(response.data?.success),
+      message: response.data?.message || "Password reset successfully",
+    };
+  },
 };

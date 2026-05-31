@@ -19,6 +19,28 @@ const buildAuthResponse = (user, token) => ({
   },
 });
 
+const isProduction = process.env.NODE_ENV === "production";
+const allowOtpDevFallback = !isProduction && process.env.OTP_DEV_FALLBACK !== "false";
+const emailSendTimeoutMs = Number(process.env.EMAIL_SEND_TIMEOUT_MS) || 8000;
+
+const isMailAuthError = (error) =>
+  error?.code === "EAUTH" || error?.responseCode === 535;
+
+const sendMailWithTimeout = (mailOptions) => {
+  const sendMailPromise = transporter.sendMail(mailOptions);
+  sendMailPromise.catch(() => {});
+
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => {
+      const timeoutError = new Error("Email send timed out");
+      timeoutError.code = "EMAIL_TIMEOUT";
+      reject(timeoutError);
+    }, emailSendTimeoutMs);
+  });
+
+  return Promise.race([sendMailPromise, timeoutPromise]);
+};
+
 export const registerUser = async (req, res) => {
     try {
         const { name, email, password, confirmPassword, mobile } = req.body;
@@ -90,8 +112,13 @@ export const getMe = async (req, res) => {
 
 export const sendOtp = async (req, res) => {
   try {
-    const { email } = req.body;
+    const email = req.body.email?.trim().toLowerCase();
     if (!email) return res.status(400).json({ message: "Email is required" });
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
 
     const otp = generateOtp();
 
@@ -99,28 +126,54 @@ export const sendOtp = async (req, res) => {
 
     await Otp.findOneAndUpdate(
       { email },
-      { otp, expiresAt },
-      { upsert: true, new: true }
+      { otp, expiresAt, verified: false },
+      { upsert: true, returnDocument: "after" }
     );
 
-    await transporter.sendMail({
-      from: `"My App" <${process.env.EMAIL_USER}>`,
-      to: email,
-      subject: "Your OTP Code",
-      text: `Your OTP is ${otp}. It will expire in 5 minutes.`,
-      html: `<h3>Your OTP is: <b>${otp}</b></h3><p>Expires in 5 minutes.</p>`,
-    });
+    try {
+      await sendMailWithTimeout({
+        from: `"My App" <${process.env.EMAIL_USER}>`,
+        to: email,
+        subject: "Your OTP Code",
+        text: `Your OTP is ${otp}. It will expire in 5 minutes.`,
+        html: `<h3>Your OTP is: <b>${otp}</b></h3><p>Expires in 5 minutes.</p>`,
+      });
+    } catch (mailError) {
+      if (allowOtpDevFallback) {
+        const reason = isMailAuthError(mailError)
+          ? "Gmail credentials were rejected"
+          : "Email delivery failed";
+
+        console.warn(
+          `${reason}. Development fallback is active. OTP for ${email}: ${otp}`,
+        );
+
+        return res.status(200).json({
+          success: true,
+          message: "OTP sent successfully",
+        });
+      }
+
+      await Otp.deleteOne({ email });
+
+      const message = isMailAuthError(mailError)
+        ? "Email service authentication failed"
+        : "Unable to send OTP right now";
+
+      return res.status(503).json({ success: false, message });
+    }
 
     res.status(200).json({ success: true, message: "OTP sent successfully" });
   } catch (err) {
-    console.error("Send OTP Error:", err);
-    res.status(500).json({ success: false, message: "Failed to send OTP" });
+    console.error("Send OTP Error:", err?.message || err);
+    res.status(500).json({ success: false, message: "Unable to send OTP right now" });
   }
 };
 
 export const verifyOtp = async (req, res) => {
   try {
-    const { email, otp } = req.body;
+    const email = req.body.email?.trim().toLowerCase();
+    const { otp } = req.body;
     if (!email || !otp)
       return res.status(400).json({ message: "Email and OTP are required" });
 
@@ -136,7 +189,8 @@ export const verifyOtp = async (req, res) => {
       return res.status(400).json({ message: "Invalid OTP" });
     }
 
-    await Otp.deleteOne({ email });
+    record.verified = true;
+    await record.save();
 
     res.status(200).json({ success: true, message: "OTP verified successfully" });
   } catch (err) {
@@ -147,7 +201,8 @@ export const verifyOtp = async (req, res) => {
 
 export const resetPassword = async (req, res) => {
   try {
-    const { newPassword, confirmPassword, email } = req.body;
+    const email = req.body.email?.trim().toLowerCase();
+    const { newPassword, confirmPassword } = req.body;
 
     if (!email || !newPassword || !confirmPassword) {
       return res.status(400).json({ message: "Email, new password and confirm password are required" });
@@ -159,11 +214,22 @@ export const resetPassword = async (req, res) => {
 
     if (!user) return res.status(400).json({ message: "User not found" });
 
+    const verifiedOtp = await Otp.findOne({ email, verified: true });
+    if (!verifiedOtp) {
+      return res.status(400).json({ success: false, message: "OTP verification required" });
+    }
+
+    if (verifiedOtp.expiresAt < new Date()) {
+      await Otp.deleteOne({ email });
+      return res.status(400).json({ success: false, message: "OTP expired" });
+    }
+
     const hashedPassword = await bcrypt.hash(confirmPassword, 12);
 
     user.password = hashedPassword;
 
     await user.save()
+    await Otp.deleteOne({ email });
 
     res.status(200).json({ success: true, message: "password reset successfully" })
   } catch (error) {
