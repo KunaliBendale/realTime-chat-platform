@@ -149,7 +149,7 @@ export function LoginPage() {
 
       <GoogleAuthButton label="Sign in with Google" />
 
-      <p className="mt-6 text-center text-sm text-[#5d6b82]">
+      <p className="mt-5 text-center text-sm text-[#5d6b82]">
         New here?{" "}
         <Link className="font-semibold text-indigo-400 hover:text-indigo-300" to="/register">
           Create an account

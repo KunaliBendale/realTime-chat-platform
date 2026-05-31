@@ -101,8 +101,9 @@ export function RegisterPage() {
     <AuthShell
       title="Create account"
       subtitle="Create your account and start messaging in seconds."
+      contentWidth="lg"
     >
-      <form className="space-y-5" onSubmit={handleSubmit} noValidate>
+      <form className="space-y-4" onSubmit={handleSubmit} noValidate>
         <AuthAlert message={error} />
 
         <FormField
@@ -117,38 +118,43 @@ export function RegisterPage() {
           placeholder="Kunal Sharma"
           error={fieldErrors.name}
           disabled={isSubmitting}
+          size="compact"
         />
 
-        <FormField
-          id="email"
-          label="Email"
-          name="email"
-          type="email"
-          autoComplete="email"
-          icon={Mail}
-          value={form.email}
-          onChange={updateField}
-          placeholder="you@example.com"
-          error={fieldErrors.email}
-          disabled={isSubmitting}
-        />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FormField
+            id="email"
+            label="Email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            icon={Mail}
+            value={form.email}
+            onChange={updateField}
+            placeholder="you@example.com"
+            error={fieldErrors.email}
+            disabled={isSubmitting}
+            size="compact"
+          />
 
-        <FormField
-          id="mobile"
-          label="Mobile"
-          name="mobile"
-          type="tel"
-          inputMode="numeric"
-          autoComplete="tel"
-          icon={Phone}
-          value={form.mobile}
-          onChange={updateField}
-          placeholder="9876543210"
-          error={fieldErrors.mobile}
-          disabled={isSubmitting}
-        />
+          <FormField
+            id="mobile"
+            label="Mobile"
+            name="mobile"
+            type="tel"
+            inputMode="numeric"
+            autoComplete="tel"
+            icon={Phone}
+            value={form.mobile}
+            onChange={updateField}
+            placeholder="9876543210"
+            error={fieldErrors.mobile}
+            disabled={isSubmitting}
+            size="compact"
+          />
+        </div>
 
-        <div className="grid gap-5 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2">
           <FormField
             id="password"
             label="Password"
@@ -161,6 +167,7 @@ export function RegisterPage() {
             placeholder="Minimum 8 characters"
             error={fieldErrors.password}
             disabled={isSubmitting}
+            size="compact"
           />
 
           <FormField
@@ -175,15 +182,16 @@ export function RegisterPage() {
             placeholder="Repeat password"
             error={fieldErrors.confirmPassword}
             disabled={isSubmitting}
+            size="compact"
           />
         </div>
 
         <Button type="submit" disabled={isSubmitting} className="w-full" size="lg">
-          {isSubmitting ? "Creating account…" : "Create account"}
+          {isSubmitting ? "Creating account..." : "Create account"}
         </Button>
       </form>
 
-      <div className="my-5 flex items-center gap-3">
+      <div className="my-4 flex items-center gap-3">
         <div className="h-px flex-1 bg-[#d9dee8]" />
         <span className="text-xs font-semibold uppercase tracking-[0.14em] text-[#66758c]">
           or
@@ -193,7 +201,7 @@ export function RegisterPage() {
 
       <GoogleAuthButton label="Sign up with Google" />
 
-      <p className="mt-6 text-center text-sm text-[#5d6b82]">
+      <p className="mt-4 text-center text-sm text-[#5d6b82]">
         Already registered?{" "}
         <Link className="font-semibold text-[#2563eb] hover:text-[#1d4ed8]" to="/login">
           Sign in

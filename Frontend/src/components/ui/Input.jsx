@@ -1,8 +1,23 @@
-export function Input({ label, error, icon: Icon, className = "", id, ...props }) {
+const sizeClasses = {
+  md: "px-4 py-3",
+  compact: "px-3.5 py-2.5",
+};
+
+export function Input({
+  label,
+  error,
+  icon: Icon,
+  className = "",
+  id,
+  size = "md",
+  ...props
+}) {
+  const inputSizeClass = sizeClasses[size] || sizeClasses.md;
+
   return (
     <div className={className}>
       {label ? (
-        <label htmlFor={id} className="mb-2 block text-sm font-medium text-[var(--text-primary)]">
+        <label htmlFor={id} className="mb-1.5 block text-sm font-medium text-[var(--text-primary)]">
           {label}
         </label>
       ) : null}
@@ -15,7 +30,7 @@ export function Input({ label, error, icon: Icon, className = "", id, ...props }
         ) : null}
         <input
           id={id}
-          className={`w-full rounded-2xl border bg-[var(--bg-input)] px-4 py-3 text-sm text-[var(--text-primary)] shadow-sm transition placeholder:text-[var(--text-muted)] focus:border-indigo-400/50 focus:ring-4 focus:ring-indigo-500/10 ${
+          className={`w-full rounded-2xl border bg-[var(--bg-input)] ${inputSizeClass} text-sm text-[var(--text-primary)] shadow-sm transition placeholder:text-[var(--text-muted)] focus:border-indigo-400/50 focus:ring-4 focus:ring-indigo-500/10 ${
             Icon ? "pl-11" : ""
           } ${
             error
