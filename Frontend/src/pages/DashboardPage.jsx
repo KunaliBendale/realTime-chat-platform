@@ -7,7 +7,6 @@ import { EmptyChatState } from "../components/chat/EmptyChatState";
 import { MediaViewerModal } from "../components/chat/MediaViewerModal";
 import { PostLoginLoader } from "../components/chat/PostLoginLoader";
 import { RecentChats } from "../components/chat/RecentChats";
-import { SettingsModal } from "../components/chat/SettingsModal";
 import { ProfileModal } from "../components/profile/ProfileModal";
 import { dummyChats } from "../data/dummyChats";
 import { useIsMobile } from "../hooks/useMediaQuery";
@@ -38,7 +37,6 @@ export function DashboardPage() {
   const isContactsLoading = useChatStore((state) => state.isContactsLoading);
   const actionLoading = useChatStore((state) => state.actionLoading);
   const error = useChatStore((state) => state.error);
-  const socketStatus = useChatStore((state) => state.socketStatus);
   const onlineUserIds = useChatStore((state) => state.onlineUserIds);
   const typingByChatId = useChatStore((state) => state.typingByChatId);
   const userSearchResults = useChatStore((state) => state.userSearchResults);
@@ -62,7 +60,6 @@ export function DashboardPage() {
   const [isProfileUploading, setIsProfileUploading] = useState(false);
   const [profileMessage, setProfileMessage] = useState("");
   const [profileError, setProfileError] = useState("");
-  const [showSettings, setShowSettings] = useState(false);
   const [mediaPreview, setMediaPreview] = useState(null);
   const [mobileShowChat, setMobileShowChat] = useState(false);
   const [showBootstrap, setShowBootstrap] = useState(true);
@@ -320,6 +317,11 @@ export function DashboardPage() {
     navigate("/login", { replace: true });
   };
 
+  const handleHeaderLogout = () => {
+    logout();
+    navigate("/login", { replace: true });
+  };
+
   const showSidebar = !isMobile || !mobileShowChat;
   const showChatPanel = !isMobile || mobileShowChat;
   const isOwnProfile = profileContext === "own";
@@ -350,7 +352,6 @@ export function DashboardPage() {
                 onSelectChat={handleSelectChat}
                 onStartContactChat={accessChat}
                 onOpenAction={setActiveChatAction}
-                onOpenSettings={() => setShowSettings(true)}
                 onOpenOwnProfile={handleOpenOwnProfile}
               />
             </motion.div>
@@ -388,7 +389,7 @@ export function DashboardPage() {
                     showBack={isMobile}
                     onBack={handleBackToList}
                     onOpenProfile={handleOpenChatProfile}
-                    onOpenSettings={() => setShowSettings(true)}
+                    onLogout={handleHeaderLogout}
                     onImageClick={setMediaPreview}
                     onPrepareOptimisticMessage={prepareOptimisticMessage}
                     onSendMessage={handleSendMessage}
@@ -435,12 +436,6 @@ export function DashboardPage() {
         onUploadImage={handleUploadProfileImage}
         onFileError={setProfileError}
         onLogout={handleProfileLogout}
-      />
-
-      <SettingsModal
-        isOpen={showSettings}
-        onClose={() => setShowSettings(false)}
-        socketStatus={socketStatus}
       />
 
       <MediaViewerModal media={mediaPreview} onClose={() => setMediaPreview(null)} />

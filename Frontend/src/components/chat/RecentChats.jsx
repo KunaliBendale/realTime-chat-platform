@@ -27,7 +27,6 @@ export function RecentChats({
   onSelectChat,
   onStartContactChat,
   onOpenAction,
-  onOpenSettings,
   onOpenOwnProfile,
 }) {
   const user = useAuthStore((state) => state.user);
@@ -88,7 +87,7 @@ export function RecentChats({
         <div className="flex items-center justify-between gap-3">
           <button
             type="button"
-            onClick={onOpenOwnProfile || onOpenSettings}
+            onClick={onOpenOwnProfile}
             className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl p-1 text-left transition hover:bg-white/5"
           >
             <Avatar name={user?.name || "You"} src={user?.profilePic} size="md" />

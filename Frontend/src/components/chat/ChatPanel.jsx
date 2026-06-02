@@ -13,7 +13,7 @@ export function ChatPanel({
   showBack,
   onBack,
   onOpenProfile,
-  onOpenSettings,
+  onLogout,
   onImageClick,
   onPrepareOptimisticMessage,
   onSendMessage,
@@ -41,7 +41,7 @@ export function ChatPanel({
         showBack={showBack}
         onBack={onBack}
         onOpenProfile={onOpenProfile}
-        onOpenSettings={onOpenSettings}
+        onLogout={onLogout}
       />
       <MessageArea
         messages={messages}
