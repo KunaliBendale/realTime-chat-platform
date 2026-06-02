@@ -10,6 +10,11 @@ const getInitials = (name = "Chat") => {
 import { formatMessageTime } from "./formatDate";
 
 const formatTime = formatMessageTime;
+export const getMessagePreviewText = ({ message, image } = {}) => {
+  if (message?.trim()) return message;
+  if (image) return "📷 Image";
+  return "No messages yet";
+};
 
 export const getOtherParticipant = (chat, currentUserId) => {
   return chat?.users?.find((user) => {
@@ -34,7 +39,7 @@ export const mapChatFromApi = (chat, currentUserId) => {
     avatar: getInitials(chatName),
     profilePic: isGroup ? null : otherParticipant?.profilePic,
     status: isGroup ? `${chat.users?.length || 0} members` : "offline",
-    lastMessage: latestMessage?.message || latestMessage?.image || "No messages yet",
+    lastMessage: getMessagePreviewText(latestMessage),
     lastMessageAt: formatTime(latestMessage?.createdAt || chat.updatedAt),
     unreadCount: 0,
     isGroup,
@@ -47,7 +52,7 @@ export const mapChatFromApi = (chat, currentUserId) => {
 export const mapMessageFromApi = (message, currentUserId) => {
   const senderId = message.sender?._id || message.sender;
   const senderName = message.sender?.name || "User";
-  const content = message.message || message.image || "";
+  const content = message.message || "";
 
   const createdAt = message.createdAt || new Date().toISOString();
 
@@ -73,7 +78,7 @@ export const createOptimisticMessage = ({ chatId, content, image, currentUser })
     id: `temp-${now.getTime()}`,
     chatId,
     sender: currentUser?.name || "You",
-    content: content || image || "",
+    content: content || "",
     image,
     time: formatTime(now),
     createdAt: now.toISOString(),

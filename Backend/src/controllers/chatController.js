@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import Chat from "../models/chatModel.js";
 import Message from "../models/messageModel.js";
 import User from "../models/userModel.js";
+import { uploadChatImage } from "../utils/chatImageUpload.js";
 
 const chatPopulateOptions = [
   {
@@ -267,11 +268,23 @@ export const sendMessage = async (req, res) => {
       return res.status(404).json({ message: "Chat not found" });
     }
 
+    let uploadedImageUrl = null;
+
+    if (image) {
+      try {
+        uploadedImageUrl = await uploadChatImage(image);
+      } catch (uploadError) {
+        return res.status(400).json({
+          message: "Failed to upload image. Please try again.",
+        });
+      }
+    }
+
     const newMessage = await Message.create({
       sender: req.user._id,
       receiver: chatContext.chat.isGroup ? undefined : chatContext.receiverId,
       message: messageText.trim(),
-      image,
+      image: uploadedImageUrl,
       chatId: chatContext.chat._id,
       roomId: chatContext.roomId,
       delivered: false,

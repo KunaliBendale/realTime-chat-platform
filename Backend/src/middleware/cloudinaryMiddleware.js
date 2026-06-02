@@ -1,7 +1,6 @@
 import { cloudinary } from "../config/cloudinary.js";
-const uploadOnCloudinary = async(path)=>{
-    const cloudinaryRes = await cloudinary.uploader.upload(path)
-    console.log(cloudinaryRes);
+const uploadOnCloudinary = async(path, options = {})=>{
+    const cloudinaryRes = await cloudinary.uploader.upload(path, options)
     return cloudinaryRes;
 }
 

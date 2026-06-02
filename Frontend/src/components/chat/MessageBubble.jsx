@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { Check, CheckCheck, Clock, ImageIcon } from "lucide-react";
+import { useState } from "react";
 import { shouldClusterWithPrevious } from "../../lib/groupMessages";
 
 export function MessageBubble({
@@ -9,6 +10,7 @@ export function MessageBubble({
   showSenderName,
   onImageClick,
 }) {
+  const [imageFailed, setImageFailed] = useState(false);
   const isClustered = shouldClusterWithPrevious(message, previousMessage);
   const isOwn = message.isOwn;
 
@@ -39,7 +41,7 @@ export function MessageBubble({
           <p className="mb-1 text-xs font-semibold text-cyan-400">{message.sender}</p>
         ) : null}
 
-        {message.image && !message.content?.startsWith("http") ? (
+        {message.image && !imageFailed ? (
           <button
             type="button"
             onClick={() => onImageClick?.({ url: message.image, alt: "Shared image" })}
@@ -49,6 +51,8 @@ export function MessageBubble({
               src={message.image}
               alt=""
               className="max-h-64 w-full object-cover transition group-hover:scale-[1.02]"
+              loading="lazy"
+              onError={() => setImageFailed(true)}
             />
             <span className="absolute inset-0 flex items-center justify-center bg-black/0 transition group-hover:bg-black/20">
               <ImageIcon
@@ -59,17 +63,13 @@ export function MessageBubble({
           </button>
         ) : null}
 
-        {message.content && !(message.image && message.content === message.image) ? (
+        {message.content ? (
           <p className="whitespace-pre-wrap break-words">{message.content}</p>
-        ) : message.image ? (
-          <button
-            type="button"
-            onClick={() => onImageClick?.({ url: message.image, alt: "Shared image" })}
-            className="flex items-center gap-2 text-left underline-offset-2 hover:underline"
-          >
+        ) : message.image && imageFailed ? (
+          <span className="flex items-center gap-2 text-left text-sm">
             <ImageIcon size={16} />
-            View attachment
-          </button>
+            Image unavailable
+          </span>
         ) : null}
 
         <motion.div

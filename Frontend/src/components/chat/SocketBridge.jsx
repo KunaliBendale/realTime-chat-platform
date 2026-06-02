@@ -12,6 +12,7 @@ export function SocketBridge() {
   const upsertIncomingMessage = useChatStore((state) => state.upsertIncomingMessage);
   const markMessageDelivered = useChatStore((state) => state.markMessageDelivered);
   const markMessageSeen = useChatStore((state) => state.markMessageSeen);
+  const handleSocketError = useChatStore((state) => state.handleSocketError);
 
   useEffect(() => {
     if (!token) {
@@ -42,6 +43,7 @@ export function SocketBridge() {
       socketService.on(socketEvents.messageSeen, markMessageSeen),
       socketService.on(socketEvents.socketError, (error) => {
         setSocketStatus(`error: ${error.message || "socket error"}`);
+        handleSocketError(error);
       }),
     ];
 
@@ -55,6 +57,7 @@ export function SocketBridge() {
     setSocketStatus,
     setTypingState,
     setUserStatus,
+    handleSocketError,
     token,
     upsertIncomingMessage,
   ]);

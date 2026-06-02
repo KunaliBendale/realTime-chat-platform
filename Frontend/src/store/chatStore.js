@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import {
   createOptimisticMessage,
+  getMessagePreviewText,
   mapChatFromApi,
   mapMessageFromApi,
 } from "../lib/chatMappers";
@@ -440,7 +441,10 @@ export const useChatStore = create((set, get) => ({
         chat.id === chatId
           ? {
               ...chat,
-              lastMessage: optimisticMessage.content,
+              lastMessage: getMessagePreviewText({
+                message: optimisticMessage.content,
+                image: optimisticMessage.image,
+              }),
               lastMessageAt: optimisticMessage.time,
             }
           : chat,
@@ -519,6 +523,24 @@ export const useChatStore = create((set, get) => ({
     }));
   },
 
+  handleSocketError: ({ message, clientTempId }) => {
+    set((state) => {
+      const messagesByChatId = clientTempId
+        ? Object.fromEntries(
+            Object.entries(state.messagesByChatId).map(([chatId, messages]) => [
+              chatId,
+              messages.filter((item) => item.id !== clientTempId),
+            ]),
+          )
+        : state.messagesByChatId;
+
+      return {
+        messagesByChatId,
+        error: message || "Something went wrong",
+      };
+    });
+  },
+
   upsertIncomingMessage: (messagePayload) => {
     const chatId = messagePayload.chatId?.toString();
 
@@ -550,7 +572,10 @@ export const useChatStore = create((set, get) => ({
           chat.id === chatId
             ? {
                 ...chat,
-                lastMessage: mappedMessage.content,
+                lastMessage: getMessagePreviewText({
+                  message: mappedMessage.content,
+                  image: mappedMessage.image,
+                }),
                 lastMessageAt: mappedMessage.time,
               }
             : chat,

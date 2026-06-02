@@ -7,6 +7,7 @@ import Message from "../models/messageModel.js";
 import { registerSmartReplySocketHandlers } from "../ai/socket/smartReply.socket.js";
 import socketAuthMiddleware from "../middleware/socket.auth.middleware.js";
 import { resolveChatForMessage } from "../controllers/chatController.js";
+import { uploadChatImage } from "./chatImageUpload.js";
 
 dotenv.config();
 
@@ -30,6 +31,7 @@ const io = new Server(server, {
     credentials: true,
   },
    transports: ["websocket", "polling"],
+  maxHttpBufferSize: Number(process.env.SOCKET_MAX_HTTP_BUFFER_BYTES) || 6 * 1024 * 1024,
 });
 
 /* =========================
@@ -186,13 +188,27 @@ io.on("connection", (socket) => {
         const isReceiverOnline =
           !directChat.isGroup && onlineUsers.has(directChat.receiverId);
 
+        let uploadedImageUrl = null;
+
+        if (image) {
+          try {
+            uploadedImageUrl = await uploadChatImage(image);
+          } catch (uploadError) {
+            console.log("Socket Image Upload Error:", uploadError.message);
+            return socket.emit("socketError", {
+              message: "Failed to upload image. Please try again.",
+              clientTempId,
+            });
+          }
+        }
+
         // save message
         const createdMessage = await Message.create({
           sender: userId,
           receiver: directChat.isGroup ? undefined : directChat.receiverId,
-          message: content,
+          message: content?.trim() || "",
           chatId: directChat.chat._id,
-          image,
+          image: uploadedImageUrl,
           roomId,
           delivered: isReceiverOnline,
           deliveredAt: isReceiverOnline ? new Date() : undefined,
