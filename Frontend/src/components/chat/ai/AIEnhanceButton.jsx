@@ -23,8 +23,10 @@ export function AIEnhanceButton({
   }, []);
 
   const handleSelectTone = async (tone) => {
-    await onSelectTone(tone);
-    setOpen(false);
+    const enhanced = await onSelectTone(tone);
+    if (enhanced) {
+      setOpen(false);
+    }
   };
 
   return (

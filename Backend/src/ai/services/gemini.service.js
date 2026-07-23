@@ -48,7 +48,13 @@ class GeminiService {
     };
   }
 
-  async generateJson({ systemPrompt, userPrompt, responseSchema, maxOutputTokens = 1024 }) {
+  async generateJson({
+    systemPrompt,
+    userPrompt,
+    responseSchema,
+    maxOutputTokens = 1024,
+    timeoutMs = aiConfig.smartReply.requestTimeoutMs,
+  }) {
     if (!aiConfig.gemini.apiKey) {
       throw new AiError("GEMINI_API_KEY is not configured", {
         code: AiErrorCodes.NOT_CONFIGURED,
@@ -70,8 +76,9 @@ class GeminiService {
                 responseSchema,
                 maxOutputTokens,
                 model,
+                timeoutMs,
               }),
-              aiConfig.smartReply.requestTimeoutMs,
+              timeoutMs,
               "AI request timed out",
             ),
           { maxRetries: aiConfig.smartReply.maxRetries },
@@ -93,7 +100,14 @@ class GeminiService {
     throw lastError;
   }
 
-  async requestJson({ systemPrompt, userPrompt, responseSchema, maxOutputTokens, model }) {
+  async requestJson({
+    systemPrompt,
+    userPrompt,
+    responseSchema,
+    maxOutputTokens,
+    model,
+    timeoutMs = aiConfig.smartReply.requestTimeoutMs,
+  }) {
     const buildBody = (useSchema) => ({
       systemInstruction: {
         parts: [{ text: systemPrompt }],
@@ -119,7 +133,7 @@ class GeminiService {
       try {
         response = await axios.post(this.getUrl(model), buildBody(true), {
           headers: this.headers,
-          timeout: aiConfig.smartReply.requestTimeoutMs,
+          timeout: timeoutMs,
         });
       } catch (schemaError) {
         const status = schemaError.response?.status;
@@ -129,7 +143,7 @@ class GeminiService {
 
         response = await axios.post(this.getUrl(model), buildBody(false), {
           headers: this.headers,
-          timeout: aiConfig.smartReply.requestTimeoutMs,
+          timeout: timeoutMs,
         });
       }
 

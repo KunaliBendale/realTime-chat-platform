@@ -52,6 +52,10 @@ export function useMessageEnhancement() {
         throw new Error("Invalid enhancement response");
       }
 
+      if (enhancedMessage.toLowerCase() === cleanMessage.toLowerCase()) {
+        throw new Error("Enhancement did not change message");
+      }
+
       setStatus("success");
       if (successTimerRef.current) {
         window.clearTimeout(successTimerRef.current);

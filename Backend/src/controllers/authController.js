@@ -132,7 +132,7 @@ export const sendOtp = async (req, res) => {
 
     try {
       await sendMailWithTimeout({
-        from: `"My App" <${process.env.EMAIL_USER}>`,
+        from: `"AI-Powered Real-Time Chat Platform" <${process.env.EMAIL_USER}>`,
         to: email,
         subject: "Your OTP Code",
         text: `Your OTP is ${otp}. It will expire in 5 minutes.`,

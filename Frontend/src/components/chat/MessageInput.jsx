@@ -137,6 +137,7 @@ export function MessageInput({
     setHideSuggestionsWhileTyping(true);
     smartReplies?.dismiss?.();
     onTyping(chat);
+    return enhancedMessage;
   };
 
   const shouldHideSuggestions = hideSuggestionsWhileTyping && Boolean(message.trim());

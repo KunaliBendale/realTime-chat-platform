@@ -17,13 +17,14 @@ export function ToneSelector({
     if (!open) return undefined;
 
     const handlePointerDown = (event) => {
+      if (isLoading) return;
       if (!panelRef.current?.contains(event.target)) {
         onClose();
       }
     };
 
     const handleKeyDown = (event) => {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && !isLoading) {
         onClose();
       }
     };
@@ -35,7 +36,7 @@ export function ToneSelector({
       document.removeEventListener("mousedown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [onClose, open]);
+  }, [isLoading, onClose, open]);
 
   return (
     <AnimatePresence>
@@ -49,6 +50,7 @@ export function ToneSelector({
           transition={{ duration: 0.16, ease: "easeOut" }}
           role="menu"
           aria-label="Choose enhancement tone"
+          onMouseDown={(event) => event.stopPropagation()}
         >
           <div className="px-3 py-2">
             <p className="text-xs font-semibold uppercase text-[var(--text-muted)]">

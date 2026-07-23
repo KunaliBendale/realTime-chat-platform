@@ -49,15 +49,6 @@ const parseEnhancedMessage = (providerResult) => {
     if (fromObject) return fromObject;
   }
 
-  const propertyMatch = text.match(/"enhancedMessage"\s*:\s*"((?:\\.|[^"\\])*)"?/i);
-  if (propertyMatch?.[1]) {
-    try {
-      return JSON.parse(`"${propertyMatch[1]}"`);
-    } catch {
-      return propertyMatch[1].replace(/\\"/g, '"');
-    }
-  }
-
   return "";
 };
 
@@ -163,7 +154,8 @@ class MessageEnhancementService {
       const result = await geminiService.generateJson({
         ...prompts,
         responseSchema: messageEnhancementResponseSchema,
-        maxOutputTokens: 512,
+        maxOutputTokens: aiConfig.messageEnhancement.maxOutputTokens,
+        timeoutMs: aiConfig.messageEnhancement.requestTimeoutMs,
       });
       const enhancedMessage = sanitizeText(
         parseEnhancedMessage(result),
