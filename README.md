@@ -113,6 +113,16 @@ AI_ENHANCE_REQUEST_TIMEOUT_MS=18000
 AI_ENHANCE_MIN_LENGTH=4
 AI_ENHANCE_CACHE_TTL_MS=120000
 
+# Login Page
+<img width="1366" height="768" alt="image" src="https://github.com/user-attachments/assets/b2f239b1-646e-44a1-aefa-7b79200dd7de" />
+
+# Dashboard - AI smart reply suggestions
+<img width="1366" height="768" alt="image" src="https://github.com/user-attachments/assets/7cee4f03-eb33-4b48-8e75-5e4c66f1a893" />
+
+# View/update Profile
+<img width="1366" height="720" alt="image" src="https://github.com/user-attachments/assets/913755ed-e0f8-437c-91d5-22661249999a" />
+
+
 
 # ⭐ Support
 
